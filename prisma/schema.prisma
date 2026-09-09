@@ -1,0 +1,64 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum PlanInterval {
+  monthly
+  yearly
+}
+
+enum SubscriptionStatus {
+  active
+  canceled
+  past_due
+  unpaid
+  incomplete
+}
+
+model users {
+  id           String         @id @default(uuid())
+  email        String         @unique
+  created_at   DateTime       @default(now())
+  updated_at   DateTime       @updatedAt
+  subscription subscriptions?
+  payment_logs payment_logs[]
+
+  @@index([email])
+}
+
+model subscriptions {
+  id                       String             @id @default(uuid())
+  user_id                  String             @unique
+  provider_subscription_id String             @unique
+  plan_interval            PlanInterval
+  status                   SubscriptionStatus
+  current_period_start     DateTime
+  current_period_end       DateTime
+  cancel_at_period_end     Boolean            @default(false)
+  cancellation_reason      String?            @db.VarChar(500)
+  created_at               DateTime           @default(now())
+  updated_at               DateTime           @updatedAt
+  user                     users              @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([status])
+}
+
+model payment_logs {
+  id                    String   @id @default(uuid())
+  user_id               String
+  provider_event_id     String   @unique
+  event_type            String
+  amount_in_minor_units Int
+  currency              String   @default("USD")
+  payload_json          Json
+  created_at            DateTime @default(now())
+  user                  users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([event_type])
+}

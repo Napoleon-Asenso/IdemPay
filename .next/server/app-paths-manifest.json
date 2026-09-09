@@ -1,0 +1,5 @@
+{
+  "/plans/page": "app/plans/page.js",
+  "/checkout/handoff/page": "app/checkout/handoff/page.js",
+  "/api/checkout/initiate/route": "app/api/checkout/initiate/route.js"
+}
