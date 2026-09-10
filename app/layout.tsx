@@ -159,11 +159,6 @@ export default async function RootLayout({
         <main className="flex-1 overflow-y-auto pt-20 w-full bg-background">
           {children}
         </main>
-        <footer className="w-full bg-surface py-space-xl flex-none">
-          <div className="max-w-7xl mx-auto px-gutter text-center text-on-surface-variant text-body-sm">
-            &copy; {new Date().getFullYear()} IdemPay, Inc. All rights reserved.
-          </div>
-        </footer>
       </body>
     </html>
   );

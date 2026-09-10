@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -18,6 +18,25 @@ export function NavigationBar({
   userEmail = "alex.dev@example.com",
 }: NavigationBarProps) {
   const pathname = usePathname();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const displayName = userEmail
+    .split("@")[0]
+    .split(/[._-]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const isPlans = pathname === "/plans";
   const isBilling = pathname === "/billing";
@@ -63,10 +82,64 @@ export function NavigationBar({
               ? "No Active Plan"
               : `Active: ${activePlan.charAt(0).toUpperCase() + activePlan.slice(1)} - $20/mo`}
           </div>
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center cursor-pointer">
-            <span className="material-symbols-outlined text-on-primary text-[18px]">
-              person
-            </span>
+
+          {/* Avatar Dropdown */}
+          <div className="relative" ref={menuRef}>
+            <button
+              type="button"
+              className="w-8 h-8 rounded-full bg-primary flex items-center justify-center cursor-pointer hover:opacity-90 transition-opacity"
+              aria-label="Account menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              <span className="material-symbols-outlined text-on-primary text-[18px]">
+                person
+              </span>
+            </button>
+
+            {menuOpen && (
+              <div className="absolute right-0 mt-2 w-72 bg-surface-container-lowest rounded-xl shadow-2xl ring-1 ring-outline-variant/50 overflow-hidden">
+                {/* User Info */}
+                <div className="px-space-md py-space-md">
+                  <div className="font-headline-sm text-headline-sm text-on-surface">
+                    {displayName}
+                  </div>
+                  <div className="text-body-sm text-text-muted mt-space-xs break-all">
+                    {userEmail}
+                  </div>
+                </div>
+
+                <div className="divide-y divide-surface-variant">
+                  <div className="px-space-md py-space-sm">
+                    <div className="flex items-center gap-space-sm">
+                      <span className="material-symbols-outlined text-[18px] text-text-muted">workspace_premium</span>
+                      <span className="text-body-md text-on-surface capitalize">
+                        {activePlan === "Free" ? "Free Tier" : `${activePlan} Plan`}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="px-space-md py-space-sm">
+                    <Link
+                      href="/billing"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-space-sm text-body-md text-on-surface hover:text-primary transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[18px] text-text-muted">receipt_long</span>
+                      <span>Billing &amp; History</span>
+                    </Link>
+                  </div>
+                  <div className="px-space-md py-space-sm">
+                    <button
+                      type="button"
+                      className="w-full flex items-center gap-space-sm text-body-md text-on-surface hover:text-error transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[18px] text-text-muted">logout</span>
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
