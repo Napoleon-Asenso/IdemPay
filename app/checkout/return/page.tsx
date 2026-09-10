@@ -18,6 +18,15 @@ function CheckoutReturnContent() {
 
   const progressPct = Math.min(100, Math.round((attemptCount / Math.min(maxAttempts, 3)) * 100));
 
+  useEffect(() => {
+    document.title =
+      status === "success"
+        ? "Payment Confirmed | IdemPay"
+        : status === "timeout"
+        ? "Verification In Progress | IdemPay"
+        : "Verifying Payment Status | IdemPay";
+  }, [status, txRef]);
+
   const checkStatus = useCallback(async () => {
     try {
       const res = await fetch(`/api/subscription/status?userId=${encodeURIComponent(userId)}`);

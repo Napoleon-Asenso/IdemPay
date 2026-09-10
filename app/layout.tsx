@@ -149,19 +149,19 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
         />
       </head>
-      <body className="bg-background font-body-md text-on-surface">
+      <body className="bg-background font-body-md text-on-surface h-screen flex flex-col overflow-hidden">
         <NavigationBar
           activePlan={state.activePlan}
           cancelAtPeriodEnd={state.cancelAtPeriodEnd}
           currentPeriodEnd={state.currentPeriodEnd}
           userEmail={state.email}
         />
-        <main className="w-full pt-20 bg-background min-h-screen">
+        <main className="flex-1 overflow-y-auto pt-20 w-full bg-background">
           {children}
         </main>
-        <footer className="w-full bg-surface py-space-xl">
+        <footer className="w-full bg-surface py-space-xl flex-none">
           <div className="max-w-7xl mx-auto px-gutter text-center text-on-surface-variant text-body-sm">
-            &copy; {new Date().getFullYear()} SubscriptionSlice, Inc. All rights reserved.
+            &copy; {new Date().getFullYear()} IdemPay, Inc. All rights reserved.
           </div>
         </footer>
       </body>

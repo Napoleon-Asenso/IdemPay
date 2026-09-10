@@ -25,18 +25,20 @@ export function NavigationBar({
   const navLinks = [
     { href: "/plans", label: "Plans", active: isPlans },
     { href: "/billing", label: "Billing", active: isBilling },
-    { href: "/billing", label: "Transaction History", active: false },
   ];
 
   return (
     <header className="fixed top-0 w-full z-50 bg-surface/85 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]">
       <div className="h-20 max-w-7xl mx-auto px-gutter flex items-center justify-between">
         <div className="flex items-center gap-space-xl">
-          <Link href="/plans" className="flex items-center">
-            <span className="text-headline-sm font-headline-sm text-primary tracking-tight">
-              SubscriptionSlice
-            </span>
-          </Link>
+          <div className="flex items-center">
+            <img
+              src="/icon.svg"
+              alt="IdemPay logo"
+              aria-label="IdemPay"
+              className="h-9 w-9 rounded-lg shadow-sm"
+            />
+          </div>
           <nav className="hidden md:flex items-center gap-space-md">
             {navLinks.map((link) => (
               <Link
