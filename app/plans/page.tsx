@@ -5,10 +5,16 @@ import { useRouter } from "next/navigation";
 import { PLANS, PlanInterval } from "@/types";
 import { calculateUpgradeProration } from "@/lib/proration";
 
+const PLAN_TABS: { interval: PlanInterval; label: string }[] = [
+  { interval: "free", label: "Starter" },
+  { interval: "monthly", label: "Monthly" },
+  { interval: "yearly", label: "Yearly" },
+];
+
 export default function PlansPage() {
   const router = useRouter();
 
-  const currentPlan: PlanInterval = "monthly";
+  const [selected, setSelected] = useState<PlanInterval>("monthly");
   const [prorationVisible, setProrationVisible] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -36,47 +42,50 @@ export default function PlansPage() {
     router.push(`/checkout/handoff?${query.toString()}`);
   };
 
+  const cardClasses = (isActive: boolean) =>
+    `flex flex-col justify-between p-space-xl rounded-xl relative overflow-hidden transition-all duration-300 ${
+      isActive
+        ? "bg-surface-container shadow-md ring-2 ring-primary/20 hover:shadow-lg"
+        : "bg-surface-container-low shadow-sm opacity-80 hover:opacity-100 hover:shadow-md"
+    }`;
+
   return (
     <div className="max-w-7xl mx-auto p-margin">
       <div className="flex flex-col w-full">
-        {/* Top Banner / Editorial Intro */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-margin mb-space-xl items-end">
-          <div className="lg:col-span-8 flex flex-col gap-space-sm">
-            <div className="flex items-center gap-space-sm">
-              <span className="px-space-md py-space-xs rounded-full bg-primary-fixed text-on-primary-fixed text-label-md tracking-wider uppercase font-semibold">
-                Subscription Management
-              </span>
-              <span className="text-on-surface-variant text-body-sm">/ Scale your tools seamlessly</span>
-            </div>
-            <h1 className="font-headline-lg text-headline-lg text-on-surface tracking-tight">
-              Flexible plans engineered for unstoppable growth.
-            </h1>
-            <p className="text-body-lg text-on-surface-variant max-w-2xl">
-              Upgrade, downgrade, or switch billing cycles instantly. Transparent proration ensures you only ever pay for what you use.
-            </p>
-          </div>
-          <div className="lg:col-span-4 flex justify-start lg:justify-end">
-            <div className="p-space-lg rounded-xl bg-surface-container-high flex items-center gap-space-md shadow-sm w-full sm:w-auto">
-              <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center shrink-0">
-                <span
-                  className="material-symbols-outlined text-on-primary text-[24px]"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  bolt
-                </span>
-              </div>
-              <div>
-                <div className="text-label-md text-on-surface-variant">Current Active Plan</div>
-                <div className="text-headline-sm text-primary">Monthly Plan ($20/mo)</div>
-              </div>
-            </div>
+        {/* Hero Text */}
+        <div className="flex flex-col items-center text-center gap-space-sm mb-space-lg">
+          <h1 className="font-headline-lg text-headline-lg text-on-surface tracking-tight">
+            Pricing Plans
+          </h1>
+          <p className="text-body-lg text-on-surface-variant">
+            Choose the right plan for your needs.
+          </p>
+        </div>
+
+        {/* Segmented Plan Nav */}
+        <div className="flex justify-center mb-space-xl">
+          <div className="inline-flex items-center gap-1 p-1 bg-surface-container rounded-full shadow-sm">
+            {PLAN_TABS.map((tab) => (
+              <button
+                key={tab.interval}
+                type="button"
+                className={`px-space-xl py-space-sm rounded-full font-label-lg transition-all ${
+                  selected === tab.interval
+                    ? "bg-primary text-on-primary shadow-sm"
+                    : "text-on-surface-variant hover:text-on-surface"
+                }`}
+                onClick={() => setSelected(tab.interval)}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
 
         {/* Pricing Cards Bento Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-margin mb-space-xl">
           {/* Free Tier Card */}
-          <div className="flex flex-col justify-between p-space-xl rounded-xl bg-surface-container-low shadow-sm relative overflow-hidden transition-all duration-300 hover:shadow-md">
+          <div className={cardClasses(selected === "free")}>
             <div>
               <div className="flex justify-between items-center mb-space-lg">
                 <span className="text-label-lg font-semibold text-on-surface-variant uppercase tracking-wider">Starter</span>
@@ -116,11 +125,8 @@ export default function PlansPage() {
             </button>
           </div>
 
-          {/* Monthly Plan Card (Active) */}
-          <div className="flex flex-col justify-between p-space-xl rounded-xl bg-surface-container shadow-md relative overflow-hidden ring-2 ring-primary/20 transition-all duration-300 hover:shadow-lg">
-            <div className="absolute top-0 right-0 bg-primary text-on-primary text-label-sm font-semibold px-space-lg py-space-xs rounded-bl-xl tracking-wider uppercase">
-              Active Plan
-            </div>
+          {/* Monthly Plan Card */}
+          <div className={cardClasses(selected === "monthly")}>
             <div>
               <div className="flex justify-between items-center mb-space-lg">
                 <span className="text-label-lg font-semibold text-primary uppercase tracking-wider">Monthly Pro</span>
@@ -158,10 +164,7 @@ export default function PlansPage() {
           </div>
 
           {/* Yearly Plan Card */}
-          <div className="flex flex-col justify-between p-space-xl rounded-xl bg-surface-container-low shadow-sm relative overflow-hidden transition-all duration-300 hover:shadow-md">
-            <div className="absolute top-0 right-0 bg-secondary text-on-secondary text-label-sm font-semibold px-space-lg py-space-xs rounded-bl-xl tracking-wider uppercase">
-              Best Value
-            </div>
+          <div className={cardClasses(selected === "yearly")}>
             <div>
               <div className="flex justify-between items-center mb-space-lg">
                 <span className="text-label-lg font-semibold text-secondary uppercase tracking-wider">Yearly Scale</span>
@@ -276,28 +279,6 @@ export default function PlansPage() {
             </div>
           </div>
         )}
-
-        {/* Additional Info / FAQ Section */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-margin">
-          <div className="p-space-xl rounded-xl bg-surface-container-low shadow-sm">
-            <div className="flex items-center gap-space-sm mb-space-md">
-              <span className="material-symbols-outlined text-primary text-[24px]">help</span>
-              <h4 className="font-headline-sm text-headline-sm text-on-surface">How does proration work?</h4>
-            </div>
-            <p className="text-body-md text-on-surface-variant leading-relaxed">
-              When you change plans mid-cycle, our system automatically calculates the unused portion of your current billing period and applies it as a direct credit toward your new subscription tier. You will only be billed the net difference immediately. All math runs on exact whole-cent integer arithmetic with zero floating-point drift.
-            </p>
-          </div>
-          <div className="p-space-xl rounded-xl bg-surface-container-low shadow-sm">
-            <div className="flex items-center gap-space-sm mb-space-md">
-              <span className="material-symbols-outlined text-primary text-[24px]">verified_user</span>
-              <h4 className="font-headline-sm text-headline-sm text-on-surface">Secure Payment &amp; Guarantee</h4>
-            </div>
-            <p className="text-body-md text-on-surface-variant leading-relaxed">
-              All transactions are processed through enterprise-grade encrypted channels compliant with PCI-DSS standards. Enjoy a 14-day money-back guarantee on all yearly upgrades if you are not fully satisfied.
-            </p>
-          </div>
-        </div>
       </div>
     </div>
   );
