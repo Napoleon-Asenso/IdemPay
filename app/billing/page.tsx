@@ -161,7 +161,7 @@ export default function BillingPage() {
   const isCancelScheduled = effectiveSubscription.cancel_at_period_end || cancellationBannerVisible || cancelPending;
 
   return (
-    <div className="max-w-7xl mx-auto p-margin">
+    <div className="px-[72px] py-margin">
       <div className="flex flex-col w-full">
         {/* Top Section: Asymmetric Header / Intro */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-space-lg mb-space-xl">

@@ -48,7 +48,7 @@ export function NavigationBar({
 
   return (
     <header className="fixed top-0 w-full z-50 bg-surface/85 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]">
-      <div className="h-20 max-w-7xl mx-auto px-gutter flex items-center justify-between">
+      <div className="h-20 px-[72px] flex items-center justify-between">
         <div className="flex items-center gap-space-xl">
           <div className="flex items-center">
             <img

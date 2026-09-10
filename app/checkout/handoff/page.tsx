@@ -67,7 +67,7 @@ function CheckoutHandoffContent() {
   }, [plan, amountInMinorUnits, userId, router]);
 
   return (
-    <div className="max-w-7xl mx-auto p-margin">
+    <div className="px-[72px] py-margin">
       <div className="flex flex-col w-full">
         {error ? (
           <div className="flex flex-col items-center justify-center py-24 text-center">

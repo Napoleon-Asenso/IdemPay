@@ -45,12 +45,12 @@ export default function PlansPage() {
   const cardClasses = (isActive: boolean) =>
     `flex flex-col justify-between p-space-xl rounded-xl relative overflow-hidden transition-all duration-300 ${
       isActive
-        ? "bg-surface-container shadow-md ring-2 ring-primary/20 hover:shadow-lg"
-        : "bg-surface-container-low shadow-sm opacity-80 hover:opacity-100 hover:shadow-md"
+        ? "bg-surface-container shadow-md border-2 border-primary hover:shadow-lg"
+        : "bg-surface-container-low shadow-sm border-2 border-outline-variant opacity-80 hover:opacity-100 hover:shadow-md"
     }`;
 
   return (
-    <div className="max-w-7xl mx-auto p-margin">
+    <div className="px-[72px] py-margin">
       <div className="flex flex-col w-full">
         {/* Hero Text */}
         <div className="flex flex-col items-center text-center gap-space-sm mb-space-lg">

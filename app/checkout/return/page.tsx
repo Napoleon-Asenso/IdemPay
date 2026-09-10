@@ -94,7 +94,7 @@ function CheckoutReturnContent() {
     : "Awaiting confirmation ping from payment gateway node.";
 
   return (
-    <div className="max-w-7xl mx-auto p-margin">
+    <div className="px-[72px] py-margin">
       <div className="flex flex-col w-full">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-space-xl items-center bg-surface p-8 rounded-2xl shadow-md relative overflow-hidden">
           <div className="absolute right-0 top-0 w-80 h-80 bg-secondary-fixed/20 rounded-full blur-3xl pointer-events-none"></div>
