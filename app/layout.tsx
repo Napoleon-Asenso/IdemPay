@@ -136,6 +136,14 @@ export default async function RootLayout({
   return (
     <html lang="en" data-theme="light">
       <head>
+        <link
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+          rel="stylesheet"
+        />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap"
+          rel="stylesheet"
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}

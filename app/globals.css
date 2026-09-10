@@ -1,3 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+::-webkit-scrollbar {
+  display: none;
+}
+
 @layer base {
   html,
   body {
@@ -15,23 +27,8 @@
   }
 }
 
-@import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap");
-
-::-webkit-scrollbar {
-  display: none;
-}
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-:root {
-  color-scheme: light;
-}
-
 body {
-  @apply bg-background font-body-md text-on-surface;
+  font-family: "Inter", sans-serif;
 }
 
 .material-symbols-outlined {
