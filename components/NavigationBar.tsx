@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useAppView, type AppView } from "@/components/AppView";
 
 interface NavigationBarProps {
   activePlan?: string;
@@ -17,7 +16,7 @@ export function NavigationBar({
   currentPeriodEnd = null,
   userEmail = "alex.dev@example.com",
 }: NavigationBarProps) {
-  const pathname = usePathname();
+  const { view, setView } = useAppView();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -38,16 +37,13 @@ export function NavigationBar({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const isPlans = pathname === "/plans";
-  const isBilling = pathname === "/billing";
-
-  const navLinks = [
-    { href: "/plans", label: "Plans", active: isPlans },
-    { href: "/billing", label: "Billing", active: isBilling },
+  const navLinks: { view: AppView; label: string }[] = [
+    { view: "plans", label: "Plans" },
+    { view: "billing", label: "Billing" },
   ];
 
   return (
-    <header className="fixed top-0 w-full z-50 bg-surface/85 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]">
+    <header className="fixed top-0 w-full z-50 bg-surface border-b border-surface-container shadow-[0_1px_8px_rgba(0,0,0,0.04)]">
       <div className="h-20 px-[72px] flex items-center justify-between">
         <div className="flex items-center gap-space-xl">
           <div className="flex items-center">
@@ -58,19 +54,23 @@ export function NavigationBar({
               className="h-9 w-9 rounded-lg shadow-sm"
             />
           </div>
+          <span className="hidden lg:block font-headline-sm text-headline-sm text-on-surface tracking-tight">
+            {view === "billing" ? "Billing & Subscription Management" : "Pricing Plans"}
+          </span>
           <nav className="hidden md:flex items-center gap-space-md">
             {navLinks.map((link) => (
-              <Link
-                key={link.label}
-                href={link.href}
+              <button
+                key={link.view}
+                type="button"
+                onClick={() => setView(link.view)}
                 className={`px-space-md py-space-xs rounded-lg transition-colors ${
-                  link.active
+                  view === link.view
                     ? "bg-primary-container text-on-primary-container font-medium"
                     : "text-on-surface-variant hover:text-on-surface"
                 }`}
               >
                 {link.label}
-              </Link>
+              </button>
             ))}
           </nav>
         </div>
@@ -119,14 +119,17 @@ export function NavigationBar({
                     </div>
                   </div>
                   <div className="px-space-md py-space-sm">
-                    <Link
-                      href="/billing"
-                      onClick={() => setMenuOpen(false)}
-                      className="flex items-center gap-space-sm text-body-md text-on-surface hover:text-primary transition-colors"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setView("billing");
+                        setMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-space-sm text-body-md text-on-surface hover:text-primary transition-colors"
                     >
                       <span className="material-symbols-outlined text-[18px] text-text-muted">receipt_long</span>
                       <span>Billing &amp; History</span>
-                    </Link>
+                    </button>
                   </div>
                   <div className="px-space-md py-space-sm">
                     <button

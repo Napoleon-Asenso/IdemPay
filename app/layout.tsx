@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { NavigationBar } from "@/components/NavigationBar";
+import { AppViewProvider } from "@/components/AppView";
 import { prisma } from "@/lib/prisma";
 
 const siteName = "IdemPay";
@@ -150,15 +151,17 @@ export default async function RootLayout({
         />
       </head>
       <body className="bg-background font-body-md text-on-surface h-screen flex flex-col overflow-hidden">
-        <NavigationBar
-          activePlan={state.activePlan}
-          cancelAtPeriodEnd={state.cancelAtPeriodEnd}
-          currentPeriodEnd={state.currentPeriodEnd}
-          userEmail={state.email}
-        />
-        <main className="flex-1 overflow-y-auto pt-20 w-full bg-background">
-          {children}
-        </main>
+        <AppViewProvider>
+          <NavigationBar
+            activePlan={state.activePlan}
+            cancelAtPeriodEnd={state.cancelAtPeriodEnd}
+            currentPeriodEnd={state.currentPeriodEnd}
+            userEmail={state.email}
+          />
+          <main className="flex-1 overflow-y-auto pt-20 w-full bg-background">
+            {children}
+          </main>
+        </AppViewProvider>
       </body>
     </html>
   );
