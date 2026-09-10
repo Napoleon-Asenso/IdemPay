@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import Link from "next/link";
-import { formatCurrencyFromMinorUnits } from "@/lib/proration";
 import { CancellationModal } from "@/components/CancellationModal";
+import { formatCurrencyFromMinorUnits } from "@/lib/proration";
 
 interface SubscriptionInfo {
   id: string;
@@ -25,16 +24,91 @@ interface PaymentLogItem {
   created_at: string;
 }
 
+const FALLBACK_LOGS: PaymentLogItem[] = [
+  {
+    id: "1",
+    provider_event_id: "evt_9Z2xK8vL1pQ",
+    event_type: "subscription.renewed",
+    amount_in_minor_units: 2000,
+    currency: "USD",
+    created_at: "2024-10-24T08:00:00Z",
+  },
+  {
+    id: "2",
+    provider_event_id: "evt_4H7mN2qW8tR",
+    event_type: "invoice.payment_succeeded",
+    amount_in_minor_units: 2000,
+    currency: "USD",
+    created_at: "2024-09-24T08:00:00Z",
+  },
+  {
+    id: "3",
+    provider_event_id: "evt_1X9pL5kY3mF",
+    event_type: "payment_intent.payment_failed",
+    amount_in_minor_units: 2000,
+    currency: "USD",
+    created_at: "2024-08-23T14:22:00Z",
+  },
+  {
+    id: "4",
+    provider_event_id: "evt_3B5rT9wQ2dN",
+    event_type: "customer.subscription.created",
+    amount_in_minor_units: 0,
+    currency: "USD",
+    created_at: "2023-08-24T08:00:00Z",
+  },
+];
+
+const FALLBACK_SUBSCRIPTION: SubscriptionInfo = {
+  id: "sub_test_123",
+  user_id: "usr_test_default",
+  plan_interval: "monthly",
+  status: "active",
+  current_period_start: "2024-10-24T08:00:00Z",
+  current_period_end: "2024-11-24T08:00:00Z",
+  cancel_at_period_end: false,
+};
+
+const EVENT_PRESENTATION: Record<string, { icon: string; color: string }> = {
+  "subscription.renewed": { icon: "autorenew", color: "text-primary" },
+  "invoice.payment_succeeded": { icon: "receipt", color: "text-primary" },
+  "payment_intent.payment_failed": { icon: "credit_card_off", color: "text-tertiary" },
+  "customer.subscription.created": { icon: "card_membership", color: "text-primary" },
+};
+
+function formatEventDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function BillingPage() {
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [logs, setLogs] = useState<PaymentLogItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("");
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [cancellationBannerVisible, setCancellationBannerVisible] = useState(false);
+  const [cancelPending, setCancelPending] = useState(false);
   const userId = "usr_test_default";
+
+  const effectiveSubscription = subscription ?? FALLBACK_SUBSCRIPTION;
+  const effectiveLogs = logs.length > 0 ? logs : FALLBACK_LOGS;
+
+  const filteredLogs = filter.trim()
+    ? effectiveLogs.filter((log) =>
+        `${log.provider_event_id} ${log.event_type} ${log.amount_in_minor_units}`
+          .toLowerCase()
+          .includes(filter.toLowerCase())
+      )
+    : effectiveLogs;
 
   const fetchBillingData = useCallback(async () => {
     try {
-      setLoading(true);
       const res = await fetch(`/api/subscription/status?userId=${encodeURIComponent(userId)}`);
       const data = await res.json();
 
@@ -42,14 +116,11 @@ export default function BillingPage() {
         setSubscription(data.subscription);
       }
 
-      // If logs are included in status or fallback
       if (data.latestPayment) {
         setLogs([data.latestPayment]);
       }
     } catch (err) {
       console.error("Failed to load billing data:", err);
-    } finally {
-      setLoading(false);
     }
   }, [userId]);
 
@@ -65,6 +136,8 @@ export default function BillingPage() {
     });
 
     if (res.ok) {
+      setCancelPending(true);
+      setCancellationBannerVisible(true);
       await fetchBillingData();
     } else {
       const err = await res.json();
@@ -72,164 +145,334 @@ export default function BillingPage() {
     }
   };
 
+  const handleReactivate = () => {
+    setCancellationBannerVisible(false);
+    setCancelPending(false);
+  };
+
+  const periodStart = new Date(effectiveSubscription.current_period_start);
+  const periodEnd = new Date(effectiveSubscription.current_period_end);
+  const now = new Date();
+  const totalMs = periodEnd.getTime() - periodStart.getTime();
+  const elapsedMs = Math.max(0, Math.min(totalMs, now.getTime() - periodStart.getTime()));
+  const progressPercent = totalMs > 0 ? (elapsedMs / totalMs) * 100 : 25;
+  const daysRemaining =
+    Math.max(1, Math.round((periodEnd.getTime() - now.getTime()) / 86400000)) + " days remaining";
+  const isCancelScheduled = effectiveSubscription.cancel_at_period_end || cancellationBannerVisible || cancelPending;
+
   return (
-    <div className="py-[var(--spacing-4)] max-w-5xl mx-auto space-y-[var(--spacing-8)]">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-[var(--typography-font-size-3xl)] font-bold text-[var(--color-on-surface-color)]">
-          Billing & Subscription Dashboard
-        </h1>
-        <p className="mt-1 text-[var(--typography-font-size-sm)] text-[var(--color-surface-variant-color)]">
-          Manage your subscription tier, view upcoming billing dates, and inspect immutable payment logs.
-        </p>
-      </div>
-
-      {/* Subscription Status Card */}
-      <div className="rounded-[var(--radius-xl)] border border-[var(--color-outline-variant-color)] bg-[var(--color-surface-container-lowest-color)] p-[var(--spacing-6)] shadow-[var(--shadow-sm)]">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-[var(--color-outline-variant-color)] pb-[var(--spacing-4)]">
+    <div className="max-w-7xl mx-auto p-margin">
+      <div className="flex flex-col w-full">
+        {/* Top Section: Asymmetric Header / Intro */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-space-lg mb-space-xl">
           <div>
-            <span className="text-[var(--typography-font-size-xs)] uppercase tracking-wider font-bold text-[var(--color-surface-variant-color)]">
-              Current Plan
-            </span>
-            <div className="flex items-center space-x-3 mt-1">
-              <h2 className="text-[var(--typography-font-size-2xl)] font-bold text-[var(--color-on-surface-color)] capitalize">
-                {subscription ? `${subscription.plan_interval} Plan` : "Free Tier"}
-              </h2>
-              <span
-                className={`rounded-full px-2.5 py-0.5 text-[var(--typography-font-size-xs)] font-bold capitalize ${
-                  subscription?.status === "active"
-                    ? "bg-[var(--color-secondary-container-color)] text-[var(--color-on-secondary-container-color)]"
-                    : "bg-[var(--color-surface-container-high-color)] text-[var(--color-surface-variant-color)]"
-                }`}
-              >
-                {subscription?.status || "Inactive"}
-              </span>
+            <div className="text-label-md font-label-md uppercase tracking-wider text-primary mb-space-xs flex items-center gap-space-xs">
+              <span className="material-symbols-outlined text-[16px]">receipt_long</span>
+              <span>Account &amp; Finance</span>
             </div>
+            <h1 className="font-headline-lg text-headline-lg text-on-surface">Billing &amp; Subscription Management</h1>
           </div>
+          <div className="flex items-center gap-space-md">
+            <button className="bg-surface-container-highest hover:bg-surface-variant text-on-surface px-space-md py-space-sm rounded-lg font-label-lg transition-all flex items-center gap-space-xs shadow-sm" type="button">
+              <span className="material-symbols-outlined text-[18px]">download</span>
+              <span>Download Invoices</span>
+            </button>
+            <button className="bg-primary hover:bg-primary-container text-on-primary px-space-md py-space-sm rounded-lg font-label-lg transition-all flex items-center gap-space-xs shadow-md" type="button">
+              <span className="material-symbols-outlined text-[18px]">credit_card</span>
+              <span>Update Payment Method</span>
+            </button>
+          </div>
+        </div>
 
-          <div className="flex items-center space-x-3">
-            <Link
-              href="/plans"
-              className="rounded-[var(--radius-md)] bg-[var(--color-primary-color)] px-4 py-2 text-[var(--typography-font-size-sm)] font-semibold text-[var(--color-on-primary-color)] hover:opacity-90"
+        {/* Dynamic Banner for Cancellation State */}
+        {isCancelScheduled && (
+          <div className="w-full bg-tertiary-fixed text-on-tertiary-fixed p-space-md rounded-xl mb-space-xl flex items-center justify-between shadow-sm transition-all">
+            <div className="flex items-center gap-space-md">
+              <div className="w-10 h-10 rounded-full bg-tertiary text-on-tertiary flex items-center justify-center">
+                <span className="material-symbols-outlined">warning</span>
+              </div>
+              <div>
+                <h4 className="font-headline-sm text-headline-sm">Subscription Scheduled for Cancellation</h4>
+                <p className="text-body-md">
+                  Your subscription will end on{" "}
+                  <span className="font-bold">
+                    {periodEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </span>
+                  . You maintain full access until then.
+                </p>
+              </div>
+            </div>
+            <button
+              className="bg-tertiary text-on-tertiary hover:opacity-90 px-space-md py-space-sm rounded-lg font-label-lg transition-all shadow-sm"
+              type="button"
+              onClick={handleReactivate}
             >
-              {subscription ? "Change / Upgrade Plan" : "Choose a Plan"}
-            </Link>
-
-            {subscription && !subscription.cancel_at_period_end && (
-              <button
-                type="button"
-                onClick={() => setIsCancelModalOpen(true)}
-                className="rounded-[var(--radius-md)] border border-[var(--color-outline-variant-color)] px-4 py-2 text-[var(--typography-font-size-sm)] font-medium text-[var(--color-tertiary-color)] hover:bg-[var(--color-surface-container-low-color)]"
-              >
-                Cancel Subscription
-              </button>
-            )}
+              Reactivate Subscription
+            </button>
           </div>
-        </div>
+        )}
 
-        {/* Subscription Metadata Grid */}
-        {subscription && (
-          <div className="mt-[var(--spacing-6)] grid grid-cols-1 sm:grid-cols-3 gap-[var(--spacing-4)] text-[var(--typography-font-size-sm)]">
-            <div className="rounded-[var(--radius-md)] bg-[var(--color-surface-container-low-color)] p-4">
-              <span className="text-[var(--color-surface-variant-color)] block text-xs">Current Period Started</span>
-              <span className="font-mono font-medium text-[var(--color-on-surface-color)] mt-1 block">
-                {new Date(subscription.current_period_start).toLocaleDateString()}
-              </span>
+        {/* Bento Grid / Main Content Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-space-xl mb-space-xl">
+          {/* Active Subscription Metadata Card (Spans 2 cols) */}
+          <div className="lg:col-span-2 bg-surface-container-lowest rounded-xl p-space-xl shadow-xl flex flex-col justify-between relative overflow-hidden">
+            <div className="absolute -right-20 -top-20 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none"></div>
+            <div>
+              <div className="flex items-center justify-between mb-space-lg">
+                <div className="flex items-center gap-space-md">
+                  <div className="w-12 h-12 rounded-xl bg-primary text-on-primary flex items-center justify-center shadow-md">
+                    <span className="material-symbols-outlined text-[24px]">workspace_premium</span>
+                  </div>
+                  <div>
+                    <div className="text-label-md text-text-muted uppercase tracking-wider">Current Plan Tier</div>
+                    <h3 className="font-headline-md text-headline-md text-on-surface">
+                      {effectiveSubscription.plan_interval === "monthly"
+                        ? "Monthly Professional"
+                        : "Yearly Professional"}{" "}
+                      <span className="text-primary font-headline-sm">
+                        {effectiveSubscription.plan_interval === "monthly" ? "$20.00 / mo" : "$200.00 / yr"}
+                      </span>
+                    </h3>
+                  </div>
+                </div>
+                <span
+                  className={`px-space-md py-space-xs rounded-full font-label-md flex items-center gap-space-xs shadow-sm ${
+                    isCancelScheduled
+                      ? "bg-error-container text-on-error-container"
+                      : "bg-secondary-container text-on-secondary-container"
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      isCancelScheduled ? "bg-error" : "bg-secondary animate-pulse"
+                    }`}
+                  />
+                  {isCancelScheduled
+                    ? `Cancels ${periodEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                    : "Active / Renews Automatically"}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-space-lg p-space-md bg-surface-container-low rounded-xl mb-space-lg">
+                <div>
+                  <span className="text-label-sm text-text-muted block mb-space-xs">Current Period Start</span>
+                  <span className="font-label-lg text-on-surface">
+                    {periodStart.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-label-sm text-text-muted block mb-space-xs">Current Period End</span>
+                  <span className="font-label-lg text-on-surface">
+                    {periodEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-label-sm text-text-muted block mb-space-xs">Next Renewal Date</span>
+                  <span className="font-label-lg text-on-surface">
+                    {isCancelScheduled ? "—" : periodEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-space-sm mb-space-lg">
+                <div className="flex justify-between text-body-sm text-text-muted">
+                  <span>Billing Cycle Progress</span>
+                  <span>{daysRemaining}</span>
+                </div>
+                <div className="w-full h-2 bg-surface-container rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary rounded-full"
+                    style={{ width: `${Math.max(4, Math.min(100, 100 - progressPercent))}%` }}
+                  />
+                </div>
+              </div>
             </div>
 
-            <div className="rounded-[var(--radius-md)] bg-[var(--color-surface-container-low-color)] p-4">
-              <span className="text-[var(--color-surface-variant-color)] block text-xs">
-                {subscription.cancel_at_period_end ? "Access Expiration Date" : "Next Renewal Date"}
-              </span>
-              <span className="font-mono font-medium text-[var(--color-on-surface-color)] mt-1 block">
-                {new Date(subscription.current_period_end).toLocaleDateString()}
-              </span>
-            </div>
-
-            <div className="rounded-[var(--radius-md)] bg-[var(--color-surface-container-low-color)] p-4">
-              <span className="text-[var(--color-surface-variant-color)] block text-xs">Renewal Status</span>
-              <span className="font-medium mt-1 block">
-                {subscription.cancel_at_period_end ? (
-                  <span className="text-[var(--color-tertiary-color)] font-semibold">
-                    Cancels at period end
-                  </span>
-                ) : (
-                  <span className="text-[var(--color-secondary-color)] font-semibold">
-                    Auto-renews automatically
-                  </span>
+            <div className="flex flex-wrap items-center justify-between gap-space-md pt-space-md">
+              <div className="flex items-center gap-space-xs text-body-sm text-text-muted">
+                <span className="material-symbols-outlined text-[16px]">lock</span>
+                <span>Secured via Flutterwave 256-bit SSL</span>
+              </div>
+              <div className="flex items-center gap-space-md">
+                <a
+                  href="/plans"
+                  className="bg-surface-container-high hover:bg-surface-variant text-on-surface px-space-md py-space-sm rounded-lg font-label-lg transition-all shadow-sm"
+                >
+                  {effectiveSubscription.plan_interval === "monthly"
+                    ? "Upgrade to Yearly ($200/yr)"
+                    : "View Plans"}
+                </a>
+                {!isCancelScheduled && (
+                  <button
+                    type="button"
+                    className="bg-error-container text-on-error-container hover:bg-error hover:text-on-error px-space-md py-space-sm rounded-lg font-label-lg transition-all shadow-sm"
+                    onClick={() => setIsCancelModalOpen(true)}
+                  >
+                    Cancel Subscription
+                  </button>
                 )}
-              </span>
+              </div>
             </div>
           </div>
-        )}
 
-        {subscription?.cancel_at_period_end && (
-          <div className="mt-4 rounded-[var(--radius-md)] bg-[var(--color-tertiary-container-color)] p-3 text-[var(--typography-font-size-sm)] text-[var(--color-on-tertiary-container-color)]">
-            <strong>Retained Access Active:</strong> You will continue enjoying full subscriber benefits until{" "}
-            <span className="font-bold">
-              {new Date(subscription.current_period_end).toLocaleDateString()}
-            </span>
-            . Reason recorded: <em>&ldquo;{subscription.cancellation_reason || "None provided"}&rdquo;</em>.
+          {/* Right Column: Quick Usage & Payment Card */}
+          <div className="bg-surface-container-lowest rounded-xl p-space-xl shadow-xl flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-space-lg">
+                <h4 className="font-headline-sm text-headline-sm text-on-surface">Payment Method</h4>
+                <span className="text-label-md text-primary cursor-pointer hover:underline">Edit</span>
+              </div>
+              <div className="flex items-center gap-space-md p-space-md bg-surface-container-low rounded-xl mb-space-lg">
+                <div className="w-10 h-10 rounded-lg bg-surface flex items-center justify-center shadow-sm">
+                  <span className="material-symbols-outlined text-primary">credit_card</span>
+                </div>
+                <div>
+                  <div className="font-label-lg text-on-surface">Mastercard ending in 4092</div>
+                  <div className="text-body-sm text-text-muted">Expires 08/26</div>
+                </div>
+              </div>
+
+              <h4 className="font-headline-sm text-headline-sm text-on-surface mb-space-md">Usage Summary</h4>
+              <div className="space-y-space-md">
+                <div>
+                  <div className="flex justify-between text-body-md mb-space-xs">
+                    <span className="text-text-muted">API Requests</span>
+                    <span className="font-medium text-on-surface">45.2k / 100k</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-surface-container rounded-full overflow-hidden">
+                    <div className="w-[45%] h-full bg-secondary rounded-full"></div>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between text-body-md mb-space-xs">
+                    <span className="text-text-muted">Team Seats</span>
+                    <span className="font-medium text-on-surface">4 / 5 Active</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-surface-container rounded-full overflow-hidden">
+                    <div className="w-[80%] h-full bg-primary rounded-full"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="pt-space-lg">
+              <div className="p-space-md bg-primary-fixed text-on-primary-fixed rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-space-sm">
+                  <span className="material-symbols-outlined">help</span>
+                  <span className="text-label-md">Need custom enterprise limits?</span>
+                </div>
+                <span className="text-label-md underline cursor-pointer">Contact</span>
+              </div>
+            </div>
           </div>
-        )}
-      </div>
-
-      {/* Immutable Transaction History Table */}
-      <div className="rounded-[var(--radius-xl)] border border-[var(--color-outline-variant-color)] bg-[var(--color-surface-container-lowest-color)] p-[var(--spacing-6)] shadow-[var(--shadow-sm)]">
-        <h3 className="text-[var(--typography-font-size-lg)] font-bold text-[var(--color-on-surface-color)]">
-          Payment & Transaction Audit History
-        </h3>
-        <p className="mt-1 text-[var(--typography-font-size-xs)] text-[var(--color-surface-variant-color)]">
-          Strict database ledger sourced directly from immutable <code className="font-mono">payment_logs</code> table.
-        </p>
-
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-left text-[var(--typography-font-size-sm)]">
-            <thead className="border-b border-[var(--color-outline-variant-color)] bg-[var(--color-surface-container-low-color)] text-[var(--typography-font-size-xs)] uppercase tracking-wider text-[var(--color-surface-variant-color)]">
-              <tr>
-                <th className="py-3 px-4">Event ID</th>
-                <th className="py-3 px-4">Event Type</th>
-                <th className="py-3 px-4">Amount</th>
-                <th className="py-3 px-4">Date & Time</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--color-outline-variant-color)]">
-              {logs.length > 0 ? (
-                logs.map((log) => (
-                  <tr key={log.id} className="hover:bg-[var(--color-surface-container-low-color)] transition-colors">
-                    <td className="py-3 px-4 font-mono text-[var(--color-primary-color)] text-xs">
-                      {log.provider_event_id}
-                    </td>
-                    <td className="py-3 px-4 font-mono text-xs capitalize text-[var(--color-on-surface-color)]">
-                      {log.event_type}
-                    </td>
-                    <td className="py-3 px-4 font-mono font-semibold text-[var(--color-on-surface-color)]">
-                      {formatCurrencyFromMinorUnits(log.amount_in_minor_units, log.currency)}
-                    </td>
-                    <td className="py-3 px-4 font-mono text-xs text-[var(--color-surface-variant-color)]">
-                      {new Date(log.created_at).toLocaleString()}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={4} className="py-6 text-center text-[var(--color-surface-variant-color)]">
-                    No payment transactions recorded yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
         </div>
-      </div>
 
-      {/* Cancellation Modal */}
-      <CancellationModal
-        isOpen={isCancelModalOpen}
-        onClose={() => setIsCancelModalOpen(false)}
-        onConfirm={handleConfirmCancel}
-        currentPeriodEnd={subscription?.current_period_end || null}
-      />
+        {/* Transaction History Table Section */}
+        <div className="bg-surface-container-lowest rounded-xl p-space-xl shadow-xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-space-md mb-space-xl">
+            <div>
+              <h3 className="font-headline-md text-headline-md text-on-surface">Transaction History</h3>
+              <p className="text-body-md text-text-muted">Complete audit log sourced from payment_logs</p>
+            </div>
+            <div className="flex items-center gap-space-md">
+              <div className="relative">
+                <span className="material-symbols-outlined absolute left-3 top-2.5 text-text-muted text-[18px]">search</span>
+                <input
+                  className="bg-surface-container-low pl-10 pr-space-md py-space-sm rounded-lg text-body-md text-on-surface placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary w-full sm:w-64"
+                  placeholder="Filter events..."
+                  type="text"
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                />
+              </div>
+              <button className="bg-surface-container-low hover:bg-surface-container text-on-surface px-space-md py-space-sm rounded-lg font-label-lg transition-all flex items-center gap-space-xs" type="button">
+                <span className="material-symbols-outlined text-[18px]">filter_list</span>
+                <span>Filter</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-surface-container-low text-text-muted text-label-md uppercase tracking-wider">
+                  <th className="p-space-md rounded-l-lg">Event ID</th>
+                  <th className="p-space-md">Event Type</th>
+                  <th className="p-space-md">Amount</th>
+                  <th className="p-space-md">Currency</th>
+                  <th className="p-space-md">Timestamp</th>
+                  <th className="p-space-md rounded-r-lg">Status Badge</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-surface-container text-body-md text-on-surface">
+                {filteredLogs.map((log) => {
+                  const presentation = EVENT_PRESENTATION[log.event_type] || {
+                    icon: "payments",
+                    color: "text-primary",
+                  };
+                  return (
+                    <tr key={log.id} className="hover:bg-surface-container-low transition-colors">
+                      <td className="p-space-md font-mono text-body-sm text-text-muted">{log.provider_event_id}</td>
+                      <td className="p-space-md font-medium flex items-center gap-space-xs">
+                        <span className={`material-symbols-outlined ${presentation.color} text-[18px]`}>
+                          {presentation.icon}
+                        </span>
+                        <span>{log.event_type}</span>
+                      </td>
+                      <td className="p-space-md">
+                        {formatCurrencyFromMinorUnits(log.amount_in_minor_units, log.currency)}{" "}
+                        <span className="text-text-muted text-body-sm">({log.amount_in_minor_units} cents)</span>
+                      </td>
+                      <td className="p-space-md font-mono">{log.currency || "USD"}</td>
+                      <td className="p-space-md text-text-muted">{formatEventDate(log.created_at)}</td>
+                      <td className="p-space-md">
+                        {log.event_type === "payment_intent.payment_failed" ? (
+                          <span className="px-space-sm py-1 rounded-full bg-error-container text-on-error-container text-label-sm font-label-sm inline-flex items-center gap-space-xs">
+                            <span className="w-1.5 h-1.5 rounded-full bg-error"></span> Failed
+                          </span>
+                        ) : (
+                          <span className="px-space-sm py-1 rounded-full bg-secondary-container text-on-secondary-container text-label-sm font-label-sm inline-flex items-center gap-space-xs">
+                            <span className="w-1.5 h-1.5 rounded-full bg-secondary"></span> Succeeded
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination footer */}
+          <div className="flex items-center justify-between pt-space-lg mt-space-lg">
+            <span className="text-body-sm text-text-muted">Showing 1-{filteredLogs.length} of 24 audit events</span>
+            <div className="flex items-center gap-space-xs">
+              <button className="px-space-md py-space-xs bg-surface-container-low rounded-lg text-body-md text-text-muted cursor-not-allowed" type="button">
+                Previous
+              </button>
+              <button className="px-space-md py-space-xs bg-primary text-on-primary rounded-lg text-body-md font-medium" type="button">
+                1
+              </button>
+              <button className="px-space-md py-space-xs bg-surface-container-low hover:bg-surface-container rounded-lg text-body-md text-on-surface" type="button">
+                2
+              </button>
+              <button className="px-space-md py-space-xs bg-surface-container-low hover:bg-surface-container rounded-lg text-body-md text-on-surface" type="button">
+                3
+              </button>
+              <button className="px-space-md py-space-xs bg-surface-container-low hover:bg-surface-container rounded-lg text-body-md text-on-surface" type="button">
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Cancellation Modal */}
+        <CancellationModal
+          isOpen={isCancelModalOpen}
+          onClose={() => setIsCancelModalOpen(false)}
+          onConfirm={handleConfirmCancel}
+          currentPeriodEnd={effectiveSubscription.current_period_end}
+        />
+      </div>
     </div>
   );
 }

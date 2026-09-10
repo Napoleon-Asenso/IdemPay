@@ -3,9 +3,100 @@ import "./globals.css";
 import { NavigationBar } from "@/components/NavigationBar";
 import { prisma } from "@/lib/prisma";
 
+const siteName = "IdemPay";
+const siteUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://idempay.app").replace(/\/$/, "");
+const siteDescription =
+  "Production-grade SaaS billing lifecycle management with exact whole-minor-unit proration, idempotent Flutterwave webhooks, and zero-trust subscription entitlements.";
+
 export const metadata: Metadata = {
-  title: "IdemPay — Zero-Trust Payment and Subscription Infrastructure",
-  description: "Production-grade SaaS billing lifecycle management with integer proration and webhook idempotency",
+  metadataBase: new URL(siteUrl),
+  applicationName: siteName,
+  generator: "Next.js",
+  creator: siteName,
+  publisher: siteName,
+  category: "technology",
+  referrer: "origin-when-cross-origin",
+  keywords: [
+    "SaaS billing",
+    "subscription management",
+    "payment infrastructure",
+    "Flutterwave checkout",
+    "proration",
+    "idempotent webhooks",
+    "zero-trust billing",
+    "IdemPay",
+  ],
+  authors: [{ name: siteName, url: siteUrl }],
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
+  title: {
+    default: `${siteName} — Zero-Trust Payment and Subscription Infrastructure`,
+    template: `%s | ${siteName}`,
+  },
+  description: siteDescription,
+  icons: {
+    icon: "/icon.svg",
+    apple: "/apple-touch-icon.png",
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: siteUrl,
+    siteName,
+    title: `${siteName} — Zero-Trust Payment and Subscription Infrastructure`,
+    description: siteDescription,
+    images: [
+      {
+        url: "/opengraph-image.png",
+        width: 1200,
+        height: 630,
+        alt: "IdemPay — Zero-Trust Payment and Subscription Infrastructure",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${siteName} — Zero-Trust Payment and Subscription Infrastructure`,
+    description: siteDescription,
+    images: ["/opengraph-image.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  alternates: {
+    canonical: siteUrl,
+  },
+};
+
+const organizationJsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      name: siteName,
+      url: siteUrl,
+      logo: `${siteUrl}/apple-touch-icon.png`,
+      description: siteDescription,
+    },
+    {
+      "@type": "WebSite",
+      name: siteName,
+      url: siteUrl,
+      description: siteDescription,
+      publisher: { "@id": `${siteUrl}#organization` },
+    },
+  ],
 };
 
 async function getSubscriptionState() {
@@ -44,16 +135,27 @@ export default async function RootLayout({
 
   return (
     <html lang="en" data-theme="light">
-      <body className="min-h-screen bg-[var(--color-background-color)] text-[var(--color-on-background-color)] antialiased">
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+        />
+      </head>
+      <body className="bg-background font-body-md text-on-surface">
         <NavigationBar
           activePlan={state.activePlan}
           cancelAtPeriodEnd={state.cancelAtPeriodEnd}
           currentPeriodEnd={state.currentPeriodEnd}
           userEmail={state.email}
         />
-        <main className="mx-auto max-w-7xl px-[var(--spacing-4)] sm:px-[var(--spacing-8)] py-[var(--spacing-6)]">
+        <main className="w-full pt-20 bg-background min-h-screen">
           {children}
         </main>
+        <footer className="w-full bg-surface py-space-xl">
+          <div className="max-w-7xl mx-auto px-gutter text-center text-on-surface-variant text-body-sm">
+            &copy; {new Date().getFullYear()} SubscriptionSlice, Inc. All rights reserved.
+          </div>
+        </footer>
       </body>
     </html>
   );

@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { formatCurrencyFromMinorUnits } from "@/lib/proration";
 
 interface ProrationCalloutProps {
   currentPlanMinorUnits: number;
@@ -10,67 +9,81 @@ interface ProrationCalloutProps {
   netAmountDue: number;
   daysRemaining: number;
   totalDays: number;
+  onCancel?: () => void;
+  onConfirm?: (() => void) | (() => Promise<void>);
+}
+
+function formatUsd(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
 }
 
 export function ProrationCallout({
-  currentPlanMinorUnits,
   newPlanMinorUnits,
   unusedCredit,
   netAmountDue,
   daysRemaining,
-  totalDays,
+  onCancel,
+  onConfirm,
 }: ProrationCalloutProps) {
   return (
-    <div className="mt-[var(--spacing-4)] rounded-[var(--radius-lg)] border border-[var(--color-primary-container-color)] bg-[var(--color-surface-container-low-color)] p-[var(--spacing-4)] shadow-[var(--shadow-sm)]">
-      <div className="flex items-center space-x-2 text-[var(--color-primary-color)] font-semibold text-[var(--typography-font-size-base)]">
-        <svg
-          className="h-5 w-5"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2"
-            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-        <span>Mid-Cycle Upgrade Proration Applied</span>
-      </div>
-
-      <p className="mt-[var(--spacing-2)] text-[var(--typography-font-size-sm)] text-[var(--color-on-surface-color)]">
-        You have{" "}
-        <span className="font-semibold">{daysRemaining} days</span> remaining in your current monthly billing period ({totalDays} days total). Your unused time is credited directly toward your new plan with zero floating-point drift.
-      </p>
-
-      {/* Itemized Calculation Summary */}
-      <div className="mt-[var(--spacing-3)] space-y-2 border-t border-[var(--color-outline-variant-color)] pt-[var(--spacing-3)] text-[var(--typography-font-size-sm)]">
-        <div className="flex justify-between">
-          <span className="text-[var(--color-surface-variant-color)]">
-            New Yearly Plan:
-          </span>
-          <span className="font-mono font-medium text-[var(--color-on-surface-color)]">
-            {formatCurrencyFromMinorUnits(newPlanMinorUnits)}
-          </span>
+    <div className="transition-all duration-300 mb-space-xl">
+      <div className="p-space-xl rounded-xl bg-surface-container-highest shadow-xl border-0 relative overflow-hidden">
+        <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-primary/5 rounded-full pointer-events-none blur-2xl"></div>
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-space-lg mb-space-lg">
+          <div>
+            <div className="flex items-center gap-space-sm mb-space-xs">
+              <span className="material-symbols-outlined text-primary text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>info</span>
+              <h3 className="font-headline-md text-headline-md text-on-surface">Mid-Cycle Proration Calculation</h3>
+            </div>
+            <p className="text-body-md text-on-surface-variant">
+              Switching plans mid-cycle. Here is how your billing breaks down with exact whole-cent integer math.
+            </p>
+          </div>
+          {onCancel && (
+            <button className="text-on-surface-variant hover:text-on-surface p-space-xs rounded-full hover:bg-surface-container transition-colors" type="button" onClick={onCancel}>
+              <span className="material-symbols-outlined text-[20px]">close</span>
+            </button>
+          )}
         </div>
 
-        <div className="flex justify-between">
-          <span className="text-[var(--color-secondary-color)]">
-            Less Unused Monthly Credit ({daysRemaining}/{totalDays} days):
-          </span>
-          <span className="font-mono font-medium text-[var(--color-secondary-color)]">
-            -{formatCurrencyFromMinorUnits(unusedCredit)}
-          </span>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-margin mb-space-xl">
+          <div className="p-space-lg rounded-lg bg-surface-container-low flex flex-col justify-between">
+            <span className="text-label-md text-on-surface-variant uppercase tracking-wider mb-space-sm">Current Plan Credit</span>
+            <div>
+              <div className="text-headline-sm text-on-surface">{formatUsd(unusedCredit)}</div>
+              <div className="text-body-sm text-on-surface-variant mt-space-xs">{daysRemaining} days remaining on current cycle</div>
+            </div>
+          </div>
+          <div className="p-space-lg rounded-lg bg-surface-container-low flex flex-col justify-between">
+            <span className="text-label-md text-on-surface-variant uppercase tracking-wider mb-space-sm">New Plan Charge</span>
+            <div>
+              <div className="text-headline-sm text-on-surface">{formatUsd(newPlanMinorUnits)}</div>
+              <div className="text-body-sm text-on-surface-variant mt-space-xs">Annual billing (saves $40/yr)</div>
+            </div>
+          </div>
+          <div className="p-space-lg rounded-lg bg-primary text-on-primary flex flex-col justify-between shadow-sm">
+            <span className="text-label-md text-on-primary-container uppercase tracking-wider mb-space-sm">Net Immediate Due</span>
+            <div>
+              <div className="text-headline-sm text-on-primary">{formatUsd(netAmountDue)}</div>
+              <div className="text-body-sm text-on-primary-container mt-space-xs">Charged securely upon confirmation</div>
+            </div>
+          </div>
         </div>
 
-        <div className="flex justify-between border-t border-[var(--color-outline-variant-color)] pt-2 text-[var(--typography-font-size-base)] font-bold">
-          <span className="text-[var(--color-on-surface-color)]">
-            Net Charge Due Today:
-          </span>
-          <span className="font-mono text-[var(--color-primary-color)]">
-            {formatCurrencyFromMinorUnits(netAmountDue)}
-          </span>
+        <div className="flex flex-col sm:flex-row items-center justify-end gap-space-md">
+          {onCancel && (
+            <button type="button" className="w-full sm:w-auto px-space-lg py-space-md rounded-lg bg-surface-container text-on-surface font-medium hover:bg-surface-container-high transition-colors" onClick={onCancel}>
+              Cancel
+            </button>
+          )}
+          <button
+            type="button"
+            className="w-full sm:w-auto px-space-xl py-space-md rounded-lg bg-secondary text-on-secondary font-medium hover:bg-secondary-container hover:text-on-secondary-container transition-all flex items-center justify-center gap-space-sm shadow-sm"
+            onClick={onConfirm}
+          >
+            <span className="material-symbols-outlined text-[18px]">lock</span>
+            <span>Confirm &amp; Secure Checkout ({formatUsd(netAmountDue)})</span>
+          </button>
         </div>
       </div>
     </div>

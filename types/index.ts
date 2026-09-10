@@ -1,4 +1,4 @@
-export type PlanInterval = "monthly" | "yearly";
+export type PlanInterval = "free" | "monthly" | "yearly";
 
 export type SubscriptionStatus =
   | "active"
@@ -49,37 +49,48 @@ export interface ProrationResult {
 export interface PlanConfig {
   interval: PlanInterval;
   name: string;
-  priceInMinorUnits: number; // e.g. 2000 for $20.00, 20000 for $200.00
+  priceInMinorUnits: number;
   currency: string;
   periodDays: number;
   features: string[];
 }
 
 export const PLANS: Record<PlanInterval, PlanConfig> = {
+  free: {
+    interval: "free",
+    name: "Starter",
+    priceInMinorUnits: 0,
+    currency: "USD",
+    periodDays: 0,
+    features: [
+      "Up to 3 active subscriptions tracked",
+      "Standard renewal alerts (Email)",
+    ],
+  },
   monthly: {
     interval: "monthly",
-    name: "Pro Monthly",
-    priceInMinorUnits: 2000, // $20.00 in minor units (cents)
+    name: "Monthly Pro",
+    priceInMinorUnits: 2000,
     currency: "USD",
     periodDays: 30,
     features: [
-      "Full API Access",
-      "Unlimited Webhook Ingestion",
-      "Standard Support",
-      "Real-time Dashboard Analytics",
+      "Unlimited subscription tracking",
+      "Instant SMS & Email alerts",
+      "Automated cancellation concierge",
+      "Advanced spending analytics & export",
     ],
   },
   yearly: {
     interval: "yearly",
-    name: "Pro Yearly",
-    priceInMinorUnits: 20000, // $200.00 in minor units (cents)
+    name: "Yearly Scale",
+    priceInMinorUnits: 20000,
     currency: "USD",
     periodDays: 365,
     features: [
-      "Everything in Pro Monthly",
-      "2 Months Free (Save $40)",
-      "Priority Support SLA",
-      "Dedicated Technical Account Manager",
+      "Everything in Monthly Pro",
+      "Priority 24/7 concierge support",
+      "Custom category tagging & budgets",
+      "Dedicated account manager",
     ],
   },
 };

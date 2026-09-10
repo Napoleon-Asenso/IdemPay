@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 interface CancellationModalProps {
   isOpen: boolean;
@@ -12,8 +12,6 @@ interface CancellationModalProps {
 const CANCELLATION_REASONS = [
   "Too Expensive",
   "Missing Features",
-  "Temporary Break",
-  "Switched to Alternative",
   "Other",
 ];
 
@@ -26,6 +24,16 @@ export function CancellationModal({
   const [selectedReason, setSelectedReason] = useState(CANCELLATION_REASONS[0]);
   const [otherText, setOtherText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setVisible(false);
+      const t = setTimeout(() => setVisible(true), 10);
+      return () => clearTimeout(t);
+    }
+    setVisible(false);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -45,75 +53,98 @@ export function CancellationModal({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-[var(--radius-xl)] border border-[var(--color-outline-variant-color)] bg-[var(--color-surface-container-lowest-color)] p-[var(--spacing-6)] shadow-[var(--shadow-xl)]">
-        <h3 className="text-[var(--typography-font-size-xl)] font-bold text-[var(--color-on-surface-color)]">
-          Cancel Subscription
-        </h3>
+  const periodEndLabel = currentPeriodEnd
+    ? new Date(currentPeriodEnd).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "period end";
 
-        <p className="mt-2 text-[var(--typography-font-size-sm)] text-[var(--color-surface-variant-color)]">
-          We are sorry to see you go. If you cancel, your account will remain{" "}
-          <strong className="text-[var(--color-on-surface-color)]">Active</strong> with full access until the end of your paid billing cycle on{" "}
-          <strong className="text-[var(--color-on-surface-color)]">
-            {currentPeriodEnd
-              ? new Date(currentPeriodEnd).toLocaleDateString()
-              : "period end"}
-          </strong>
-          .
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/50 backdrop-blur-sm"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className={`bg-surface-container-lowest rounded-xl p-space-xl max-w-lg w-full mx-gutter shadow-2xl transform transition-all duration-200 ${
+          visible ? "scale-100 opacity-100" : "scale-95 opacity-0"
+        }`}
+      >
+        <div className="flex items-center justify-between mb-space-lg">
+          <div className="flex items-center gap-space-md">
+            <div className="w-10 h-10 rounded-full bg-error-container text-on-error-container flex items-center justify-center">
+              <span className="material-symbols-outlined">warning</span>
+            </div>
+            <h3 className="font-headline-md text-headline-md text-on-surface">Cancel Subscription</h3>
+          </div>
+          <button className="text-text-muted hover:text-on-surface" type="button" onClick={onClose}>
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <p className="text-body-md text-text-muted mb-space-lg">
+          We&apos;re sorry to see you go. Your subscription will be set to{" "}
+          <code className="font-mono bg-surface-container-low px-1 rounded text-primary">
+            cancel_at_period_end = true
+          </code>
+          . You will retain full access to all features until the end of your billing cycle on{" "}
+          <strong className="text-on-surface">{periodEndLabel}</strong>.
         </p>
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          <div>
-            <label className="block text-[var(--typography-font-size-xs)] font-bold uppercase tracking-wider text-[var(--color-surface-variant-color)]">
-              Reason for Cancellation (Optional)
+        <form onSubmit={handleSubmit}>
+          <div className="mb-space-lg">
+            <label className="block text-label-lg font-label-lg text-on-surface mb-space-sm">
+              Please share why you are canceling (optional):
             </label>
-            <div className="mt-2 space-y-2">
+            <div className="space-y-space-sm">
               {CANCELLATION_REASONS.map((reason) => (
                 <label
                   key={reason}
-                  className="flex items-center space-x-2 text-[var(--typography-font-size-sm)] text-[var(--color-on-surface-color)] cursor-pointer"
+                  className="flex items-center gap-space-md p-space-md rounded-lg bg-surface-container-low cursor-pointer hover:bg-surface-container transition-colors"
                 >
                   <input
+                    className="text-primary focus:ring-primary h-4 w-4"
+                    name="cancel_reason"
                     type="radio"
-                    name="cancellationReason"
                     value={reason}
                     checked={selectedReason === reason}
                     onChange={(e) => setSelectedReason(e.target.value)}
-                    className="text-[var(--color-primary-color)] focus:ring-[var(--color-primary-color)]"
                   />
-                  <span>{reason}</span>
+                  <span className="text-body-md text-on-surface">{reason}</span>
                 </label>
               ))}
             </div>
           </div>
 
           {selectedReason === "Other" && (
-            <div>
+            <div className="mb-space-lg">
               <textarea
                 placeholder="Tell us what we could improve..."
                 value={otherText}
                 onChange={(e) => setOtherText(e.target.value)}
                 maxLength={500}
                 rows={3}
-                className="w-full rounded-[var(--radius-md)] border border-[var(--color-outline-variant-color)] bg-[var(--color-surface-container-low-color)] p-2 text-[var(--typography-font-size-sm)] text-[var(--color-on-surface-color)] focus:border-[var(--color-primary-color)] focus:outline-none"
+                className="w-full rounded-lg bg-surface-container-low p-3 text-body-md text-on-surface placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
           )}
 
-          <div className="mt-6 flex justify-end space-x-3 border-t border-[var(--color-outline-variant-color)] pt-4">
+          <div className="flex items-center justify-end gap-space-md">
             <button
               type="button"
               disabled={submitting}
+              className="bg-surface-container-low hover:bg-surface-container text-on-surface px-space-md py-space-sm rounded-lg font-label-lg transition-all"
               onClick={onClose}
-              className="rounded-[var(--radius-md)] px-4 py-2 text-[var(--typography-font-size-sm)] font-medium text-[var(--color-on-surface-color)] hover:bg-[var(--color-surface-container-low-color)]"
             >
               Keep Subscription
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-[var(--radius-md)] bg-[var(--color-tertiary-color)] px-4 py-2 text-[var(--typography-font-size-sm)] font-semibold text-[var(--color-on-tertiary-color)] hover:opacity-90"
+              className="bg-error text-on-error hover:opacity-90 px-space-md py-space-sm rounded-lg font-label-lg transition-all shadow-md"
             >
               {submitting ? "Canceling..." : "Confirm Cancellation"}
             </button>
