@@ -78,7 +78,7 @@ function CheckoutHandoffContent() {
             <p className="mt-2 text-body-md text-text-muted max-w-md">{error}</p>
             <button
               type="button"
-              onClick={() => router.push("/plans")}
+              onClick={() => router.push("/")}
               className="mt-6 bg-primary text-on-primary px-space-lg py-space-md rounded-lg font-label-lg hover:bg-primary-container transition-colors shadow-md"
             >
               Return to Plans
@@ -86,9 +86,6 @@ function CheckoutHandoffContent() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-12 gap-space-xl items-center bg-surface p-8 rounded-2xl shadow-md relative overflow-hidden">
-            {/* Background decorative ambient blur */}
-            <div className="absolute -right-20 -top-20 w-72 h-72 bg-primary/10 rounded-full blur-3xl pointer-events-none"></div>
-            <div className="absolute -left-20 -bottom-20 w-72 h-72 bg-secondary-fixed-dim/20 rounded-full blur-3xl pointer-events-none"></div>
 
             <div className="md:col-span-7 flex flex-col gap-space-lg relative z-10">
               <div className="flex items-center gap-space-sm">

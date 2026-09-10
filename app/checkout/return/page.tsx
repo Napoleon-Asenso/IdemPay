@@ -97,7 +97,6 @@ function CheckoutReturnContent() {
     <div className="px-[72px] py-margin">
       <div className="flex flex-col w-full">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-space-xl items-center bg-surface p-8 rounded-2xl shadow-md relative overflow-hidden">
-          <div className="absolute right-0 top-0 w-80 h-80 bg-secondary-fixed/20 rounded-full blur-3xl pointer-events-none"></div>
 
           <div className="md:col-span-7 flex flex-col gap-space-lg relative z-10">
             <div className="flex items-center gap-space-sm">
@@ -159,7 +158,7 @@ function CheckoutReturnContent() {
                 </div>
                 <div className="flex items-center gap-space-md pt-space-sm">
                   <Link
-                    href="/billing"
+                    href="/?view=billing"
                     className="flex items-center justify-center gap-space-sm px-space-xl py-space-md bg-primary text-on-primary rounded-lg font-label-lg hover:bg-primary-container transition-colors shadow-md"
                   >
                     <span className="material-symbols-outlined text-[18px]">dashboard</span>
@@ -213,7 +212,7 @@ function CheckoutReturnContent() {
                     Check Status Again
                   </button>
                   <Link
-                    href="/billing"
+                    href="/?view=billing"
                     className="px-space-lg py-space-md bg-surface-container text-on-surface rounded-lg font-label-lg hover:bg-surface-container-high transition-colors"
                   >
                     Proceed to Billing History

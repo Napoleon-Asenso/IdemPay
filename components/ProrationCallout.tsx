@@ -28,7 +28,6 @@ export function ProrationCallout({
   return (
     <div className="transition-all duration-300 mb-space-xl">
       <div className="p-space-xl rounded-xl bg-surface-container-highest shadow-xl border-0 relative overflow-hidden">
-        <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-primary/5 rounded-full pointer-events-none blur-2xl"></div>
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-space-lg mb-space-lg">
           <div>
             <div className="flex items-center gap-space-sm mb-space-xs">
