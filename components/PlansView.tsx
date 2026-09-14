@@ -56,14 +56,42 @@ export default function PlansView() {
       <button
         type="button"
         className="w-full py-space-md px-space-lg rounded-lg bg-primary text-on-primary font-medium hover:bg-primary-container transition-colors flex items-center justify-center gap-space-sm shadow-sm"
-        onClick={() =>
-          initiateCheckout(interval, PLANS[interval].priceInMinorUnits, action.isUpgrade)
-        }
+        onClick={() => {
+          if (action.isUpgrade) {
+            initiateCheckout(interval, PLANS[interval].priceInMinorUnits, true);
+          } else {
+            handleDowngrade(interval);
+          }
+        }}
       >
         <span>{action.label}</span>
         <span className="material-symbols-outlined text-[1.125rem]">arrow_forward</span>
       </button>
     );
+  };
+
+  const handleDowngrade = async (target: PlanInterval) => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+    try {
+      const res = await fetch("/api/subscription/downgrade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "usr_test_default", planInterval: target }),
+      });
+
+      if (res.ok) {
+        router.refresh();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to downgrade plan");
+      }
+    } catch (err) {
+      console.error("Failed to downgrade plan:", err);
+      alert("Failed to downgrade plan");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const initiateCheckout = (plan: PlanInterval, amountInMinorUnits: number, isUpgrade: boolean) => {
