@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { CancellationModal } from "@/components/CancellationModal";
+import { StatusToast } from "@/components/StatusToast";
 import { useAppView } from "@/components/AppView";
 import { PLANS, type PlanInterval } from "@/types";
 
@@ -33,6 +34,7 @@ export default function BillingView() {
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [cancellationBannerVisible, setCancellationBannerVisible] = useState(false);
   const [cancelPending, setCancelPending] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const userId = "usr_test_default";
 
   const effectiveSubscription = subscription ?? FREE_SUBSCRIPTION;
@@ -74,6 +76,16 @@ export default function BillingView() {
       setCancelPending(true);
       setCancellationBannerVisible(true);
       await fetchBillingData();
+      const dateLabel = new Date(
+        effectiveSubscription.current_period_end
+      ).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+      setToast(
+        `Cancellation successful. You keep full access until ${dateLabel} — when your subscription ends.`
+      );
     } else {
       const err = await res.json();
       alert(err.error || "Failed to cancel subscription");
@@ -92,6 +104,7 @@ export default function BillingView() {
         setCancellationBannerVisible(false);
         setCancelPending(false);
         await fetchBillingData();
+        setToast("Subscription reactivated successfully.");
       } else {
         const err = await res.json();
         alert(err.error || "Failed to reactivate subscription");
@@ -104,6 +117,26 @@ export default function BillingView() {
 
   const periodStart = isFree ? null : new Date(effectiveSubscription.current_period_start);
   const periodEnd = isFree ? null : new Date(effectiveSubscription.current_period_end);
+  // Keep displayed period dates current: if the billing window already lapsed
+  // while the subscription is still active, roll forward for legibility.
+  {
+    const isYearly = planInterval === "yearly";
+    let guard = 0;
+    while (
+      periodStart &&
+      periodEnd &&
+      periodEnd.getTime() <= Date.now() &&
+      guard < 60
+    ) {
+      periodStart.setTime(periodEnd.getTime());
+      if (isYearly) {
+        periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+      } else {
+        periodEnd.setMonth(periodEnd.getMonth() + 1);
+      }
+      guard += 1;
+    }
+  }
   const totalMs = periodStart && periodEnd ? periodEnd.getTime() - periodStart.getTime() : 0;
   const elapsedMs =
     periodStart && totalMs > 0
@@ -112,7 +145,8 @@ export default function BillingView() {
   const progressPercent = totalMs > 0 ? (elapsedMs / totalMs) * 100 : 0;
   const daysRemaining = isFree
     ? "—"
-    : Math.max(1, Math.round((periodEnd!.getTime() - new Date().getTime()) / 86400000)) + " days remaining";
+    : Math.max(0, Math.round((periodEnd!.getTime() - new Date().getTime()) / 86400000)) +
+      " days remaining";
   const isCancelScheduled = effectiveSubscription.cancel_at_period_end || cancellationBannerVisible || cancelPending;
 
   return (
@@ -320,6 +354,8 @@ export default function BillingView() {
           currentPeriodEnd={effectiveSubscription.current_period_end}
         />
       </div>
+
+      <StatusToast message={toast} onClose={() => setToast(null)} />
     </div>
   );
 }

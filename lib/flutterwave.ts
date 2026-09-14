@@ -19,8 +19,9 @@ export interface FlutterwaveEvent {
     amount_in_minor_units?: number;
     currency?: string;
     status?: string;
+    payment_type?: string;
     subscription_id?: string | number;
-    meta?: { user_id?: string; plan_interval?: string };
+    meta?: { user_id?: string; plan_interval?: string; payment_method?: string };
   };
 }
 
@@ -101,6 +102,10 @@ export async function processChargeEvent(
       : Math.floor((Number(event.data?.amount) || 0) * 100);
 
   const currency = event.data?.currency || "USD";
+  const paymentMethod =
+    event.data?.payment_type ||
+    event.data?.meta?.payment_method ||
+    "card";
   const isSuccessfulCharge =
     event.event === "charge.completed" && event.data?.status === "successful";
 
@@ -113,6 +118,13 @@ export async function processChargeEvent(
           event_type: event.event || "charge.completed",
           amount_in_minor_units: amountInMinorUnits,
           currency,
+          payment_method: paymentMethod,
+          status: isSuccessfulCharge ? "successful" : event.event || "received",
+          gateway: "flutterwave",
+          transaction_id:
+            typeof event.data?.id === "number" || typeof event.data?.id === "string"
+              ? String(event.data.id)
+              : null,
           payload_json: event,
         },
       });

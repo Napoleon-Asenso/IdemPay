@@ -60,6 +60,10 @@ async function main() {
         event_type: "charge.completed",
         amount_in_minor_units: 2000,
         currency: "USD",
+        payment_method: "card",
+        status: "successful",
+        gateway: "flutterwave",
+        transaction_id: "flw_txn_initial_monthly_001",
         payload_json: {
           id: "flw_txn_initial_monthly_001",
           event: "charge.completed",

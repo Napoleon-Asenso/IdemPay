@@ -3,6 +3,7 @@ import "./globals.css";
 import { NavigationBar } from "@/components/NavigationBar";
 import { AppViewProvider } from "@/components/AppView";
 import { prisma } from "@/lib/prisma";
+import { ensureCurrentPeriod } from "@/lib/subscription-periods";
 
 const siteName = "IdemPay";
 const siteUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://idempay.app").replace(/\/$/, "");
@@ -108,10 +109,16 @@ async function getSubscriptionState() {
     });
 
     if (user?.subscription && user.subscription.status === "active") {
+      // Period maintenance: keep the displayed dates current if the billing
+      // window has rolled past its end (no tier/status changes happen here).
+      const refreshed = await ensureCurrentPeriod(user.subscription.id);
+      const periodEnd =
+        refreshed?.current_period_end ?? user.subscription.current_period_end;
+
       return {
         activePlan: user.subscription.plan_interval,
         cancelAtPeriodEnd: user.subscription.cancel_at_period_end,
-        currentPeriodEnd: user.subscription.current_period_end.toISOString(),
+        currentPeriodEnd: periodEnd.toISOString(),
         email: user.email,
       };
     }

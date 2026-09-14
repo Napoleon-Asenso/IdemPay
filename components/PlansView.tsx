@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppView } from "@/components/AppView";
+import { StatusToast } from "@/components/StatusToast";
 import { PLANS, PlanInterval } from "@/types";
 
 const PLAN_TABS: { interval: PlanInterval; label: string }[] = [
@@ -30,6 +31,7 @@ export default function PlansView() {
 
   const [selected, setSelected] = useState<PlanInterval>("monthly");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   const getPlanAction = (interval: PlanInterval) => {
     const diff = PLAN_TIER[interval] - PLAN_TIER[currentPlan];
@@ -81,6 +83,7 @@ export default function PlansView() {
       });
 
       if (res.ok) {
+        setToast(`Downgrade successful. You are now on the ${PLANS[target].name} plan.`);
         router.refresh();
       } else {
         const data = await res.json();
@@ -258,6 +261,8 @@ export default function PlansView() {
             {renderAction("yearly")}
           </div>
         </div>
+
+        <StatusToast message={toast} onClose={() => setToast(null)} />
       </div>
     </div>
   );

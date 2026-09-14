@@ -37,6 +37,10 @@ export interface PaymentLog {
   event_type: string;
   amount_in_minor_units: number;
   currency: string;
+  payment_method?: string | null;
+  status?: string | null;
+  gateway?: string;
+  transaction_id?: string | null;
   payload_json: Record<string, unknown> | any;
   created_at: Date | string;
 }

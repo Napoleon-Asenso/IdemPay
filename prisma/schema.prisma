@@ -56,6 +56,10 @@ model payment_logs {
   event_type            String
   amount_in_minor_units Int
   currency              String   @default("USD")
+  payment_method        String?
+  status                String?
+  gateway               String   @default("flutterwave")
+  transaction_id        String?
   payload_json          Json
   created_at            DateTime @default(now())
   user                  users    @relation(fields: [user_id], references: [id], onDelete: Cascade)

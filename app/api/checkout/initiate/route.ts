@@ -27,7 +27,7 @@ function checkRateLimit(userId: string): boolean {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { userId, planInterval, amountInMinorUnits } = body;
+    const { userId, planInterval, amountInMinorUnits, paymentMethod, isUpgrade } = body;
 
     if (!userId || !planInterval || !amountInMinorUnits) {
       return NextResponse.json(
@@ -35,6 +35,16 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Whitelisted hosted-checkout payment options (Flutterwave payment_options).
+    const supportedMethods = ["card", "banktransfer", "account", "ussd", "mobilemoney"];
+    const requestedMethod = String(paymentMethod || "card");
+    const paymentMethodValue = supportedMethods.includes(requestedMethod)
+      ? requestedMethod
+      : "card";
+    const paymentOptions = body.paymentOptions
+      ? String(body.paymentOptions)
+      : "card,banktransfer,account";
 
     // Guard against spam via rate limit
     if (!checkRateLimit(userId)) {
@@ -73,16 +83,23 @@ export async function POST(req: NextRequest) {
         event_type: "checkout_initiated",
         amount_in_minor_units: Number(amountInMinorUnits),
         currency: "USD",
+        payment_method: paymentMethodValue,
+        status: "initiated",
+        gateway: "flutterwave",
         payload_json: {
           tx_ref: txRef,
           plan_interval: planInterval,
+          payment_method: paymentMethodValue,
+          payment_options: paymentOptions,
           initiated_at: new Date().toISOString(),
         },
       },
     });
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    const redirectUrl = `${appUrl}/checkout/return?tx_ref=${txRef}`;
+    const redirectUrl = isUpgrade
+      ? `${appUrl}/checkout/return?tx_ref=${txRef}&isUpgrade=true`
+      : `${appUrl}/checkout/return?tx_ref=${txRef}`;
 
     // --- Flutterwave Standard (Hosted Checkout) integration ---
     // Server-side call to POST /v3/payments returns a hosted checkout link.
@@ -122,11 +139,15 @@ export async function POST(req: NextRequest) {
       meta: {
         user_id: userId,
         plan_interval: planInterval,
+        payment_method: paymentMethodValue,
       },
       configurations: {
         session_duration: 30,
         max_retry_attempt: 3,
       },
+      // Enable users to switch between cards, bank accounts, transfers, etc.
+      // inside the hosted Flutterwave payment page.
+      payment_options: paymentOptions,
     };
 
     if (paymentPlan) {

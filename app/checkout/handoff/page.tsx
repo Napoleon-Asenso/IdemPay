@@ -11,6 +11,7 @@ function CheckoutHandoffContent() {
   const plan = searchParams.get("plan") || "monthly";
   const amountStr = searchParams.get("amount") || "2000";
   const userId = searchParams.get("userId") || "usr_test_default";
+  const isUpgrade = searchParams.get("isUpgrade") === "true";
 
   const amountInMinorUnits = parseInt(amountStr, 10) || 2000;
 
@@ -30,6 +31,7 @@ function CheckoutHandoffContent() {
             userId,
             planInterval: plan,
             amountInMinorUnits,
+            isUpgrade,
           }),
         });
 

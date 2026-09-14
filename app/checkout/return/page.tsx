@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { StatusToast } from "@/components/StatusToast";
 import { PLANS } from "@/types";
 
 function planDisplayName(interval?: string | null): string | null {
@@ -22,6 +23,19 @@ function CheckoutReturnContent() {
     "confirming"
   );
   const [planName, setPlanName] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const isUpgradeFlow = searchParams.get("isUpgrade") === "true";
+
+  useEffect(() => {
+    if (status === "success") {
+      setToast(
+        isUpgradeFlow
+          ? `Upgrade successful — your ${planName ?? "plan"} is now active.`
+          : `Payment successful — your ${planName ?? "plan"} is now active.`
+      );
+    }
+  }, [status, isUpgradeFlow, planName]);
 
   useEffect(() => {
     document.title =
