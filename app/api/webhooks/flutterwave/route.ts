@@ -7,6 +7,29 @@ import {
   verifyFlutterwaveTransaction,
 } from "@/lib/flutterwave";
 
+// Loose in-memory burst limiter for webhook floods. Generous enough that
+// Flutterwave retries always pass; hardens against replay/DDoS floods.
+const rateLimitMap = new Map<string, { count: number; expiresAt: number }>();
+
+function checkWebhookRateLimit(key: string): boolean {
+  const now = Date.now();
+  const windowMs = 60 * 1000;
+  const maxRequests = 120;
+
+  const entry = rateLimitMap.get(key);
+  if (!entry || now > entry.expiresAt) {
+    rateLimitMap.set(key, { count: 1, expiresAt: now + windowMs });
+    return true;
+  }
+
+  if (entry.count >= maxRequests) {
+    return false;
+  }
+
+  entry.count += 1;
+  return true;
+}
+
 /**
  * Flutterwave Webhook Route Handler
  *
@@ -56,6 +79,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // 2b. Burst rate limit after verification — protects DB mutation paths
+    // from floods without ever throttling legitimate gateway retries.
+    const forwarded = req.headers.get("x-forwarded-for");
+    const clientIp = forwarded
+      ? forwarded.split(",")[0].trim()
+      : req.headers.get("x-real-ip") || "unknown";
+
+    if (!checkWebhookRateLimit(clientIp)) {
+      logger.warn({
+        context: "Webhook:Flutterwave",
+        message: `Webhook rate limit exceeded from ${clientIp}`,
+      });
+      return NextResponse.json(
+        { error: "Too many webhook requests" },
+        { status: 429 }
+      );
+    }
+
     // 3. Safe parsing after verified signature
     const event = JSON.parse(rawBody) as FlutterwaveEvent;
     const providerEventId = String(event.data?.id ?? event.id ?? "");
@@ -94,6 +135,20 @@ export async function POST(req: NextRequest) {
         message: `Transaction ${providerEventId} verified server-side`,
         data: { providerEventId },
       });
+
+      // 4b. Zero-trust guard: a charge webhook without a subscriber identity in
+      // meta must never mutate state (would otherwise write user_id "").
+      if (!event.data?.meta?.user_id) {
+        logger.warn({
+          context: "Webhook:Flutterwave",
+          message: `Charge event ${providerEventId} rejected: missing meta.user_id`,
+          data: { providerEventId },
+        });
+        return NextResponse.json(
+          { error: "Payload is missing subscriber identity. No state was mutated." },
+          { status: 400 }
+        );
+      }
     }
 
     // 5. Atomic, idempotent event processing
