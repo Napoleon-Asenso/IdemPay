@@ -31,7 +31,7 @@ export function ProrationCallout({
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-space-lg mb-space-lg">
           <div>
             <div className="flex items-center gap-space-sm mb-space-xs">
-              <span className="material-symbols-outlined text-primary text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>info</span>
+              <span className="material-symbols-outlined text-primary text-[1.375rem]" style={{ fontVariationSettings: "'FILL' 1" }}>info</span>
               <h3 className="font-headline-md text-headline-md text-on-surface">Mid-Cycle Proration Calculation</h3>
             </div>
             <p className="text-body-md text-on-surface-variant">
@@ -40,7 +40,7 @@ export function ProrationCallout({
           </div>
           {onCancel && (
             <button className="text-on-surface-variant hover:text-on-surface p-space-xs rounded-full hover:bg-surface-container transition-colors" type="button" onClick={onCancel}>
-              <span className="material-symbols-outlined text-[20px]">close</span>
+              <span className="material-symbols-outlined text-[1.25rem]">close</span>
             </button>
           )}
         </div>
@@ -80,7 +80,7 @@ export function ProrationCallout({
             className="w-full sm:w-auto px-space-xl py-space-md rounded-lg bg-secondary text-on-secondary font-medium hover:bg-secondary-container hover:text-on-secondary-container transition-all flex items-center justify-center gap-space-sm shadow-sm"
             onClick={onConfirm}
           >
-            <span className="material-symbols-outlined text-[18px]">lock</span>
+            <span className="material-symbols-outlined text-[1.125rem]">lock</span>
             <span>Confirm &amp; Secure Checkout ({formatUsd(netAmountDue)})</span>
           </button>
         </div>

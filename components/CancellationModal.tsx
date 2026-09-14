@@ -86,12 +86,10 @@ export function CancellationModal({
         </div>
 
         <p className="text-body-md text-text-muted mb-space-lg">
-          We&apos;re sorry to see you go. Your subscription will be set to{" "}
-          <code className="font-mono bg-surface-container-low px-1 rounded text-primary">
-            cancel_at_period_end = true
-          </code>
-          . You will retain full access to all features until the end of your billing cycle on{" "}
-          <strong className="text-on-surface">{periodEndLabel}</strong>.
+          We&apos;re sorry to see you go. Your subscription will be cancelled at the
+          end of your current billing cycle on{" "}
+          <strong className="text-on-surface">{periodEndLabel}</strong>. You&apos;ll
+          keep full access until then — nothing else is required.
         </p>
 
         <form onSubmit={handleSubmit}>
@@ -127,12 +125,12 @@ export function CancellationModal({
                 onChange={(e) => setOtherText(e.target.value)}
                 maxLength={500}
                 rows={3}
-                className="w-full rounded-lg bg-surface-container-low p-3 text-body-md text-on-surface placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full rounded-lg bg-surface-container-low p-space-sm-md text-body-md text-on-surface placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
           )}
 
-          <div className="flex items-center justify-end gap-space-md">
+          <div className="flex flex-wrap items-center justify-end gap-space-md">
             <button
               type="button"
               disabled={submitting}

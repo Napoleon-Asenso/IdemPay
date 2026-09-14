@@ -1,244 +1,282 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useRef, Suspense } from "react";
+import React, { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { PLANS } from "@/types";
+
+function planDisplayName(interval?: string | null): string | null {
+  if (interval === "monthly" || interval === "yearly") return PLANS[interval].name;
+  return null;
+}
 
 function CheckoutReturnContent() {
   const searchParams = useSearchParams();
 
-  const txRef = searchParams.get("tx_ref") || "tx_ref_982341";
+  const txRef = searchParams.get("tx_ref") || "";
+  const transactionId = searchParams.get("transaction_id") || "";
+  const redirectStatus = searchParams.get("status") || "";
   const userId = searchParams.get("userId") || "usr_test_default";
 
-  const [status, setStatus] = useState<"polling" | "success" | "timeout">("polling");
-  const [subscriptionData, setSubscriptionData] = useState<any>(null);
-  const [attemptCount, setAttemptCount] = useState(0);
-  const maxAttempts = 15;
-  const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  const progressPct = Math.min(100, Math.round((attemptCount / Math.min(maxAttempts, 3)) * 100));
+  const [status, setStatus] = useState<"confirming" | "success" | "pending" | "cancelled">(
+    "confirming"
+  );
+  const [planName, setPlanName] = useState<string | null>(null);
 
   useEffect(() => {
     document.title =
       status === "success"
         ? "Payment Confirmed | IdemPay"
-        : status === "timeout"
-        ? "Verification In Progress | IdemPay"
-        : "Verifying Payment Status | IdemPay";
-  }, [status, txRef]);
+        : status === "cancelled"
+        ? "Payment Not Completed | IdemPay"
+        : "Confirming Payment | IdemPay";
+  }, [status]);
 
-  const checkStatus = useCallback(async () => {
+  const checkStatus = useCallback(async (): Promise<boolean> => {
+    try {
+      if (transactionId && txRef) {
+        const res = await fetch("/api/checkout/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, txRef, transactionId }),
+        });
+        const data = await res.json();
+        if (res.ok && data.confirmed) {
+          const interval = data.subscription?.plan_interval;
+          const name = planDisplayName(interval);
+          if (name) setPlanName(name);
+          setStatus("success");
+          return true;
+        }
+      }
+    } catch (e) {
+      console.error("Confirmation error:", e);
+    }
+
     try {
       const res = await fetch(`/api/subscription/status?userId=${encodeURIComponent(userId)}`);
       const data = await res.json();
-
       if (res.ok && data.hasActiveSubscription) {
-        setSubscriptionData(data.subscription);
+        const name = planDisplayName(data.subscription?.plan_interval);
+        if (name) setPlanName(name);
         setStatus("success");
-        if (pollTimerRef.current) clearInterval(pollTimerRef.current);
         return true;
       }
     } catch (e) {
-      console.error("Polling error:", e);
+      console.error("Status polling error:", e);
     }
-    return false;
-  }, [userId]);
 
-  const resetPolling = useCallback(() => {
-    setAttemptCount(0);
-    setStatus("polling");
-    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-    checkStatus();
-    pollTimerRef.current = setInterval(async () => {
-      setAttemptCount((prev) => {
-        const next = prev + 1;
-        if (next >= maxAttempts) {
-          if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-          setStatus("timeout");
-        }
-        return next;
-      });
-      await checkStatus();
-    }, 2000);
-  }, [checkStatus, maxAttempts]);
+    return false;
+  }, [transactionId, txRef, userId]);
 
   useEffect(() => {
-    resetPolling();
+    if (redirectStatus === "cancelled" || redirectStatus === "failed") {
+      setStatus("cancelled");
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const ok = await checkStatus();
+      if (!ok && !cancelled) setStatus("pending");
+    })();
     return () => {
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+      cancelled = true;
     };
-  }, [resetPolling]);
+  }, [checkStatus, redirectStatus]);
 
   const isSuccess = status === "success";
-  const isTimeout = status === "timeout";
-
-  const statusBadgeClass = isSuccess
-    ? "px-space-md py-space-xs rounded-full bg-secondary-container text-on-secondary-container text-label-sm font-label-sm"
-    : isTimeout
-    ? "px-space-md py-space-xs rounded-full bg-error-container text-on-error-container text-label-sm font-label-sm"
-    : "px-space-md py-space-xs rounded-full bg-surface-container-high text-on-surface-variant text-label-sm font-label-sm";
-
-  const statusBadgeText = isSuccess ? "Verified Active" : isTimeout ? "Verification Timeout" : "Polling API";
-
-  const iconWrapperClass = isSuccess
-    ? "w-16 h-16 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center shadow-inner transition-all duration-500"
-    : isTimeout
-    ? "w-16 h-16 rounded-full bg-error-container text-on-error-container flex items-center justify-center shadow-inner transition-all duration-500"
-    : "w-16 h-16 rounded-full bg-primary-fixed text-on-primary-fixed flex items-center justify-center shadow-inner transition-all duration-500";
-
-  const cardTitle = isSuccess ? "Active Status" : isTimeout ? "Verification Delayed" : "Verifying Webhook";
-  const cardDesc = isSuccess
-    ? "Subscription successfully bound to your account profile."
-    : isTimeout
-    ? "Awaiting delivery of the cryptographic webhook confirmation."
-    : "Awaiting confirmation ping from payment gateway node.";
+  const isPending = status === "pending";
+  const isCancelled = status === "cancelled";
+  const isConfirming = status === "confirming";
 
   return (
-    <div className="px-[72px] py-margin">
+    <div className="w-full px-space-md sm:px-space-lg md:px-page-x py-margin">
       <div className="flex flex-col w-full">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-space-xl items-center bg-surface p-8 rounded-2xl shadow-md relative overflow-hidden">
-
-          <div className="md:col-span-7 flex flex-col gap-space-lg relative z-10">
-            <div className="flex items-center gap-space-sm">
-              <span className="px-space-md py-space-xs rounded-full bg-secondary-container text-on-secondary-container text-label-sm font-label-sm">
-                GET /checkout/return?tx_ref={txRef}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-space-xl items-center bg-surface p-space-md sm:p-space-lg-xl rounded-2xl shadow-md relative overflow-hidden">
+          <div className="md:col-span-7 flex flex-col gap-space-lg relative z-10 min-w-0 w-full">
+            <div className="flex flex-wrap items-center gap-space-sm min-w-0">
+              <span className="shrink-0 px-space-md py-space-xs rounded-full bg-surface-container-high text-on-surface-variant text-label-sm font-label-sm">
+                {isSuccess ? "Payment Completed" : "Order Reference"}
               </span>
-              <span className={statusBadgeClass}>{statusBadgeText}</span>
+              <span className="min-w-0 max-w-full truncate px-space-md py-space-xs rounded-full bg-surface-container-lowest text-on-surface-variant text-label-sm font-label-sm">
+                #{txRef.replace(/tx_?/, "")}
+              </span>
             </div>
 
-            <div className="flex flex-col gap-space-xs">
-              <h1 className="font-headline-lg text-headline-lg text-on-surface">
-                {isSuccess
-                  ? "Payment Confirmed!"
-                  : isTimeout
-                  ? "Verification In Progress"
-                  : "Verifying Payment Status"}
-              </h1>
-              <p className="text-body-lg text-on-surface-variant">
-                {isSuccess
-                  ? "Your transaction has been securely processed and confirmed."
-                  : isTimeout
-                  ? "The payment gateway has received your transaction, but server-to-server confirmation is taking longer than expected."
-                  : "Verifying secure webhook confirmation from Flutterwave servers..."}
-              </p>
-            </div>
-
-            {status === "polling" && (
-              <div className="flex flex-col gap-space-sm py-space-sm">
-                <div className="flex justify-between text-body-sm text-on-surface-variant">
-                  <span>
-                    Checking GET /api/subscription/status (Attempt {Math.min(attemptCount + 1, 3)}/3)...
+            {/* Confirming state */}
+            {isConfirming && (
+              <div className="flex flex-col gap-space-lg w-full min-w-0">
+                <h1 className="w-full max-w-full break-words font-headline-lg text-[clamp(1.5rem,1.25rem+2.5vw,3rem)] leading-[1.15] tracking-[clamp(-0.025em,calc(-0.005em_-_0.002vw),-0.005em)] text-on-surface [text-wrap:balance]">
+                  Confirming your payment
+                </h1>
+                <p className="w-full max-w-full break-words text-body-lg text-on-surface-variant max-w-2xl [text-wrap:balance]">
+                  Please wait a moment while we finalize your subscription.
+                </p>
+                <div className="flex items-center gap-space-md py-space-sm">
+                  <div className="relative w-8 h-8 flex items-center justify-center shrink-0">
+                    <div className="absolute inset-0 border-4 border-primary/20 rounded-full"></div>
+                    <div className="absolute inset-0 border-4 border-primary rounded-full animate-spin border-t-transparent"></div>
+                  </div>
+                  <span className="font-label-lg text-label-lg text-on-surface">
+                    Processing…
                   </span>
-                  <span>{progressPct}%</span>
-                </div>
-                <div className="w-full h-3 bg-surface-container rounded-full overflow-hidden">
-                  <div
-                    className="w-1/3 h-full bg-primary transition-all duration-500 rounded-full"
-                    style={{ width: `${Math.max(33, progressPct)}%` }}
-                  />
                 </div>
               </div>
             )}
 
+            {/* Success state */}
             {isSuccess && (
-              <div className="flex flex-col gap-space-md" id="success-container">
-                <div className="p-space-lg bg-secondary-container/30 rounded-xl flex items-start gap-space-md">
+              <div className="flex flex-col gap-space-lg w-full min-w-0">
+                <h1 className="w-full max-w-full break-words font-headline-lg text-[clamp(1.5rem,1.25rem+2.5vw,3rem)] leading-[1.15] tracking-[clamp(-0.025em,calc(-0.005em_-_0.002vw),-0.005em)] text-on-surface [text-wrap:balance]">
+                  Payment Confirmed!
+                </h1>
+                <p className="w-full max-w-full break-words text-body-lg text-on-surface-variant max-w-2xl [text-wrap:balance]">
+                  Your payment was successful and your{" "}
+                  {planName ? <strong className="text-on-surface">{planName}</strong> : "plan"} has
+                  been activated. Welcome aboard!
+                </p>
+                <div className="p-space-md sm:p-space-lg bg-secondary-container/30 rounded-xl flex items-start gap-space-md">
                   <span
-                    className="material-symbols-outlined text-secondary text-[24px] mt-0.5"
+                    className="material-symbols-outlined text-secondary text-[1.5rem] mt-space-2xs shrink-0"
                     style={{ fontVariationSettings: "'FILL' 1" }}
                   >
                     check_circle
                   </span>
-                  <div className="flex flex-col gap-space-xs">
-                    <span className="font-label-lg text-label-lg text-on-surface">Subscription Activated Successfully</span>
-                    <span className="text-body-md text-on-surface-variant">
-                      Your transaction reference <strong className="text-on-surface">{txRef}</strong> has been successfully verified, and your account has been upgraded.
+                  <div className="flex flex-col gap-space-xs min-w-0">
+                    <span className="font-label-lg text-label-lg text-on-surface">
+                      {planName ? `${planName} activated` : "Plan activated"}
+                    </span>
+                    <span className="text-body-md text-on-surface-variant break-words">
+                      {planName
+                        ? `Your ${planName} plan is ready to use.`
+                        : "Your upgraded plan is ready to use."}
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-space-md pt-space-sm">
+                <div className="flex flex-wrap items-center gap-space-md pt-space-sm">
                   <Link
                     href="/?view=billing"
                     className="flex items-center justify-center gap-space-sm px-space-xl py-space-md bg-primary text-on-primary rounded-lg font-label-lg hover:bg-primary-container transition-colors shadow-md"
                   >
-                    <span className="material-symbols-outlined text-[18px]">dashboard</span>
+                    <span className="material-symbols-outlined text-[1.125rem]">dashboard</span>
                     <span>Go to Billing Dashboard</span>
                   </Link>
-                  <button
-                    type="button"
+                  <Link
+                    href="/?view=plans"
                     className="px-space-lg py-space-md bg-surface-container text-on-surface rounded-lg font-label-lg hover:bg-surface-container-high transition-colors"
-                    onClick={resetPolling}
                   >
-                    Replay Flow
-                  </button>
+                    Back to Plans
+                  </Link>
                 </div>
               </div>
             )}
 
-            {status === "polling" && (
-              <div className="flex items-center gap-space-sm pt-space-sm">
-                <button
-                  type="button"
-                  className="px-space-lg py-space-md bg-surface-container text-on-surface rounded-lg font-label-lg hover:bg-surface-container-high transition-colors"
-                  onClick={() => {
-                    // Force-verify: treat as confirmed for demonstration purposes
-                    setSubscriptionData({ plan_interval: "monthly", status: "active" });
-                    setStatus("success");
-                    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-                  }}
-                >
-                  Skip Polling / Force Verify
-                </button>
-              </div>
-            )}
-
-            {isTimeout && (
-              <div className="flex flex-col gap-space-md pt-space-sm">
-                <div className="p-space-lg bg-error-container/30 rounded-xl flex items-start gap-space-md">
-                  <span className="material-symbols-outlined text-error text-[24px] mt-0.5">hourglass_top</span>
-                  <div className="flex flex-col gap-space-xs">
-                    <span className="font-label-lg text-label-lg text-on-surface">Zero-Trust Protection Active</span>
-                    <span className="text-body-md text-on-surface-variant">
-                      Entitlements are never unlocked from client-side state. Your account will update automatically once the verified webhook arrives.
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-space-md">
+            {/* Pending state */}
+            {isPending && (
+              <div className="flex flex-col gap-space-lg w-full min-w-0">
+                <h1 className="w-full max-w-full break-words font-headline-lg text-[clamp(1.5rem,1.25rem+2.5vw,3rem)] leading-[1.15] tracking-[clamp(-0.025em,calc(-0.005em_-_0.002vw),-0.005em)] text-on-surface [text-wrap:balance]">
+                  Almost there
+                </h1>
+                <p className="w-full max-w-full break-words text-body-lg text-on-surface-variant max-w-2xl [text-wrap:balance]">
+                  We received your payment and are finishing the final steps to activate your plan.
+                </p>
+                <div className="flex flex-wrap items-center gap-space-md">
                   <button
                     type="button"
                     className="px-space-xl py-space-md bg-primary text-on-primary rounded-lg font-label-lg hover:bg-primary-container transition-colors shadow-md"
-                    onClick={resetPolling}
+                    onClick={async () => {
+                      setStatus("confirming");
+                      const ok = await checkStatus();
+                      if (!ok) setStatus("pending");
+                    }}
                   >
-                    Check Status Again
+                    Check Payment Status
                   </button>
                   <Link
                     href="/?view=billing"
                     className="px-space-lg py-space-md bg-surface-container text-on-surface rounded-lg font-label-lg hover:bg-surface-container-high transition-colors"
                   >
-                    Proceed to Billing History
+                    Go to Billing
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {/* Cancelled / failed state */}
+            {isCancelled && (
+              <div className="flex flex-col gap-space-lg w-full min-w-0">
+                <h1 className="w-full max-w-full break-words font-headline-lg text-[clamp(1.5rem,1.25rem+2.5vw,3rem)] leading-[1.15] tracking-[clamp(-0.025em,calc(-0.005em_-_0.002vw),-0.005em)] text-on-surface [text-wrap:balance]">
+                  Payment not completed
+                </h1>
+                <p className="w-full max-w-full break-words text-body-lg text-on-surface-variant max-w-2xl [text-wrap:balance]">
+                  No charges were made. You can choose a plan again whenever you&apos;re ready.
+                </p>
+                <div className="flex flex-wrap items-center gap-space-md pt-space-sm">
+                  <Link
+                    href="/?view=plans"
+                    className="flex items-center justify-center gap-space-sm px-space-xl py-space-md bg-primary text-on-primary rounded-lg font-label-lg hover:bg-primary-container transition-colors shadow-md"
+                  >
+                    <span className="material-symbols-outlined text-[1.125rem]">grid_view</span>
+                    <span>Choose a Plan</span>
+                  </Link>
+                  <Link
+                    href="/?view=billing"
+                    className="px-space-lg py-space-md bg-surface-container text-on-surface rounded-lg font-label-lg hover:bg-surface-container-high transition-colors"
+                  >
+                    Go to Billing
                   </Link>
                 </div>
               </div>
             )}
           </div>
 
-          <div className="md:col-span-5 flex flex-col items-center justify-center relative z-10">
-            <div className="w-full max-w-xs bg-surface-container-lowest p-8 rounded-2xl shadow-xl flex flex-col items-center text-center gap-space-md">
-              <div className={iconWrapperClass}>
-                <span className={`material-symbols-outlined text-[36px] ${status === "polling" ? "animate-spin" : ""}`}>
-                  {isSuccess ? "verified" : isTimeout ? "hourglass_empty" : "sync"}
+          <div className="md:col-span-5 flex flex-col items-center justify-center relative z-10 min-w-0">
+            <div className="w-full max-w-xs min-w-0 bg-surface-container-lowest p-space-md sm:p-space-lg-xl rounded-2xl shadow-xl flex flex-col items-center text-center gap-space-md">
+              <div
+                className={`w-16 h-16 rounded-full flex items-center justify-center shadow-inner shrink-0 ${
+                  isSuccess
+                    ? "bg-secondary-container text-on-secondary-container"
+                    : isCancelled
+                    ? "bg-error-container text-on-error-container"
+                    : "bg-primary-fixed text-on-primary-fixed"
+                }`}
+              >
+                <span
+                  className={`material-symbols-outlined text-[2.25rem] ${isConfirming ? "animate-spin" : ""}`}
+                  style={isSuccess ? { fontVariationSettings: "'FILL' 1" } : undefined}
+                >
+                  {isSuccess ? "verified" : isCancelled ? "close" : "sync"}
                 </span>
               </div>
-              <div className="flex flex-col gap-space-xs">
-                <h3 className="font-headline-sm text-headline-sm text-on-surface">{cardTitle}</h3>
-                <p className="text-body-sm text-on-surface-variant">{cardDesc}</p>
+              <div className="flex flex-col gap-space-xs w-full min-w-0">
+                <h3 className="font-headline-sm text-headline-sm text-on-surface break-words">
+                  {isSuccess
+                    ? "Payment Confirmed"
+                    : isCancelled
+                    ? "Payment Cancelled"
+                    : isPending
+                    ? "Processing"
+                    : "Confirming Payment"}
+                </h3>
+                <p className="text-body-sm text-on-surface-variant break-words">
+                  {isSuccess
+                    ? planName
+                      ? `Your ${planName} plan is now active.`
+                      : "Your plan is now active."
+                    : isCancelled
+                    ? "Your payment was not completed."
+                    : "Please wait a moment."}
+                </p>
               </div>
-              <div className="w-full bg-surface-container py-2 px-3 rounded-lg flex items-center justify-between text-body-sm">
-                <span className="text-text-muted">Transaction ID</span>
-                <span className="font-medium text-on-surface">
-                  #{txRef.replace(/tx_?/, "")}
-                </span>
-              </div>
+              {txRef && (
+                <div className="w-full bg-surface-container py-space-sm px-space-sm-md rounded-lg flex items-center justify-between gap-space-sm text-body-sm">
+                  <span className="shrink-0 text-text-muted">Transaction ID</span>
+                  <span className="font-medium text-on-surface min-w-0 truncate">
+                    #{txRef.replace(/tx_?/, "")}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>

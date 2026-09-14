@@ -2,6 +2,17 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { useAppView, type AppView } from "@/components/AppView";
+import { PLANS, type PlanInterval } from "@/types";
+
+function getActivePlanPill(activePlan: string): string {
+  const key = activePlan.toLowerCase() as PlanInterval;
+  if (key === "monthly" || key === "yearly") {
+    const plan = PLANS[key];
+    const price = key === "yearly" ? "$200.00/yr" : "$20.00/mo";
+    return `Active: ${plan.name} · ${price}`;
+  }
+  return "No Active Plan";
+}
 
 interface NavigationBarProps {
   activePlan?: string;
@@ -27,6 +38,14 @@ export function NavigationBar({
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 
+  const avatarInitials =
+    displayName
+      .split(" ")
+      .map((part) => part.charAt(0))
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "U";
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -43,30 +62,29 @@ export function NavigationBar({
   ];
 
   return (
-    <header className="fixed top-0 w-full z-50 bg-surface border-b border-surface-container shadow-[0_1px_8px_rgba(0,0,0,0.04)]">
-      <div className="h-20 px-[72px] flex items-center justify-between">
+    <header className="fixed top-0 w-full z-50 bg-background shadow-navbar">
+      <div className="h-header-h px-space-md sm:px-space-lg md:px-page-x flex items-center justify-between">
         <div className="flex items-center gap-space-xl">
-          <div className="flex items-center">
+          <div className="flex items-center gap-space-sm" aria-label="IdemPay">
             <img
               src="/icon.svg"
-              alt="IdemPay logo"
-              aria-label="IdemPay"
+              alt=""
               className="h-9 w-9 rounded-lg shadow-sm"
             />
+            <span className="hidden lg:block font-headline-sm text-headline-sm text-on-surface tracking-tight">
+              IdemPay
+            </span>
           </div>
-          <span className="hidden lg:block font-headline-sm text-headline-sm text-on-surface tracking-tight">
-            {view === "billing" ? "Billing & Subscription Management" : "Pricing Plans"}
-          </span>
           <nav className="hidden md:flex items-center gap-space-md">
             {navLinks.map((link) => (
               <button
                 key={link.view}
                 type="button"
                 onClick={() => setView(link.view)}
-                className={`px-space-md py-space-xs rounded-lg transition-colors ${
+                className={`px-space-md py-space-sm border-b-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
                   view === link.view
-                    ? "bg-primary-container text-on-primary-container font-medium"
-                    : "text-on-surface-variant hover:text-on-surface"
+                    ? "border-primary text-on-surface font-medium"
+                    : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-primary"
                 }`}
               >
                 {link.label}
@@ -76,31 +94,39 @@ export function NavigationBar({
         </div>
 
         <div className="flex items-center gap-space-lg">
-          <div className="hidden sm:flex items-center px-space-md py-space-xs rounded-full bg-secondary-container text-on-secondary-container text-label-md">
-            <span className="w-2 h-2 rounded-full bg-secondary mr-2 inline-block" />
-            {activePlan === "Free"
-              ? "No Active Plan"
-              : `Active: ${activePlan.charAt(0).toUpperCase() + activePlan.slice(1)} - $20/mo`}
+          <div className="hidden sm:flex items-center text-secondary">
+            <span className="w-2 h-2 rounded-full bg-secondary mr-space-sm inline-block animate-pulse" />
+            {getActivePlanPill(activePlan)}
           </div>
 
-          {/* Avatar Dropdown */}
+          {/* Account Dropdown */}
           <div className="relative" ref={menuRef}>
             <button
               type="button"
-              className="w-8 h-8 rounded-full bg-primary flex items-center justify-center cursor-pointer hover:opacity-90 transition-opacity"
+              className="flex md:hidden items-center justify-center w-8 h-8 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+              aria-label={menuOpen ? "Close menu" : "Open menu"}
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              <span className="material-symbols-outlined text-[1.5rem]">
+                {menuOpen ? "close" : "menu"}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className="hidden md:flex w-8 h-8 rounded-full bg-primary-container text-on-primary-container items-center justify-center cursor-pointer hover:opacity-90 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
               aria-label="Account menu"
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((open) => !open)}
             >
-              <span className="material-symbols-outlined text-on-primary text-[18px]">
-                person
-              </span>
+              <span className="text-label-md font-label-md">{avatarInitials}</span>
             </button>
 
             {menuOpen && (
-              <div className="absolute right-0 mt-2 w-72 bg-surface-container-lowest rounded-xl shadow-2xl ring-1 ring-outline-variant/50 overflow-hidden">
+              <div className="absolute right-0 mt-space-sm w-72 bg-surface-container-lowest rounded-xl shadow-lg ring-1 ring-outline-variant/50 overflow-hidden">
                 {/* User Info */}
-                <div className="px-space-md py-space-md">
+                <div className="px-space-md py-space-md border-b border-surface-container bg-surface-container-low/50">
                   <div className="font-headline-sm text-headline-sm text-on-surface">
                     {displayName}
                   </div>
@@ -109,14 +135,19 @@ export function NavigationBar({
                   </div>
                 </div>
 
-                <div className="divide-y divide-surface-variant">
+                <div className="divide-y divide-surface-container">
                   <div className="px-space-md py-space-sm">
-                    <div className="flex items-center gap-space-sm">
-                      <span className="material-symbols-outlined text-[18px] text-text-muted">workspace_premium</span>
-                      <span className="text-body-md text-on-surface capitalize">
-                        {activePlan === "Free" ? "Free Tier" : `${activePlan} Plan`}
-                      </span>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setView("plans");
+                        setMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-space-sm text-body-md text-on-surface hover:text-primary transition-colors rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                    >
+                      <span className="material-symbols-outlined text-[1.125rem] text-text-muted">grid_view</span>
+                      <span>Plans</span>
+                    </button>
                   </div>
                   <div className="px-space-md py-space-sm">
                     <button
@@ -125,18 +156,18 @@ export function NavigationBar({
                         setView("billing");
                         setMenuOpen(false);
                       }}
-                      className="w-full flex items-center gap-space-sm text-body-md text-on-surface hover:text-primary transition-colors"
+                      className="w-full flex items-center gap-space-sm text-body-md text-on-surface hover:text-primary transition-colors rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
                     >
-                      <span className="material-symbols-outlined text-[18px] text-text-muted">receipt_long</span>
-                      <span>Billing &amp; History</span>
+                      <span className="material-symbols-outlined text-[1.125rem] text-text-muted">receipt_long</span>
+                      <span>Billing</span>
                     </button>
                   </div>
                   <div className="px-space-md py-space-sm">
                     <button
                       type="button"
-                      className="w-full flex items-center gap-space-sm text-body-md text-on-surface hover:text-error transition-colors"
+                      className="w-full flex items-center gap-space-sm text-body-md text-on-surface hover:text-error transition-colors rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
                     >
-                      <span className="material-symbols-outlined text-[18px] text-text-muted">logout</span>
+                      <span className="material-symbols-outlined text-[1.125rem] text-text-muted">logout</span>
                       <span>Sign Out</span>
                     </button>
                   </div>

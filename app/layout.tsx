@@ -145,20 +145,24 @@ export default async function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap"
           rel="stylesheet"
         />
+        <link
+          href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400..700&display=swap"
+          rel="stylesheet"
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
         />
       </head>
       <body className="bg-background font-body-md text-on-surface h-screen flex flex-col overflow-hidden">
-        <AppViewProvider>
+        <AppViewProvider activePlan={state.activePlan}>
           <NavigationBar
             activePlan={state.activePlan}
             cancelAtPeriodEnd={state.cancelAtPeriodEnd}
             currentPeriodEnd={state.currentPeriodEnd}
             userEmail={state.email}
           />
-          <main className="flex-1 overflow-y-auto pt-20 w-full bg-background">
+          <main className="flex-1 overflow-y-auto pt-header-h w-full bg-background">
             {children}
           </main>
         </AppViewProvider>

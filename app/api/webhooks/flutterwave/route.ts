@@ -1,18 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import {
+  FlutterwaveEvent,
+  processChargeEvent,
+  verifyFlutterwaveTransaction,
+} from "@/lib/flutterwave";
 
 /**
  * Flutterwave Webhook Route Handler
- * 
+ *
  * Rules:
  * 1. Read raw body as text using req.text() BEFORE any JSON parsing.
- * 2. Constant-time timingSafeEqual HMAC validation on verif-hash header against FLUTTERWAVE_SECRET_HASH.
+ * 2. Constant-time timingSafeEqual secret comparison on verif-hash header against FLUTTERWAVE_SECRET_HASH.
  * 3. Reject with 401 Unauthorized immediately if missing or invalid.
- * 4. Execute idempotent atomic transaction: insert payment_logs with provider_event_id.
- * 5. Handle P2002 duplicate collisions idempotently with 200 OK "Event already processed".
- * 6. Update user subscription state safely if charge.completed and successful.
+ * 4. For charge.completed events, execute a mandatory server-to-server transaction
+ *    verification (GET /v3/transactions/{id}/verify) BEFORE any DB mutation.
+ * 5. Execute idempotent atomic transaction: insert payment_logs with provider_event_id.
+ * 6. Handle P2002 duplicate collisions idempotently with 200 OK "Event already processed".
+ * 7. Update user subscription state safely if charge.completed and successful.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -32,17 +38,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // 2. Cryptographic Constant-Time Signature Comparison
     const signatureBuffer = Buffer.from(signature);
     const secretBuffer = Buffer.from(secretHash);
 
-    // 2. Cryptographic Constant-Time Signature Comparison
     if (
       signatureBuffer.length !== secretBuffer.length ||
       !crypto.timingSafeEqual(signatureBuffer, secretBuffer)
     ) {
       logger.warn({
         context: "Webhook:Flutterwave",
-        message: "Invalid HMAC signature comparison failure",
+        message: "Invalid signature comparison failure",
       });
       return NextResponse.json(
         { error: "Invalid signature verification" },
@@ -51,8 +57,8 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Safe parsing after verified signature
-    const event = JSON.parse(rawBody);
-    const providerEventId = String(event.data?.id || event.id);
+    const event = JSON.parse(rawBody) as FlutterwaveEvent;
+    const providerEventId = String(event.data?.id ?? event.id ?? "");
 
     if (!providerEventId) {
       return NextResponse.json(
@@ -61,101 +67,46 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const userId = event.data?.meta?.user_id;
-    const planInterval = event.data?.meta?.plan_interval as "monthly" | "yearly" | undefined;
+    // 4. Mandatory server-to-server transaction verification (PRD §2)
+    if (event.event === "charge.completed") {
+      const verified = await verifyFlutterwaveTransaction(providerEventId);
 
-    // Monetary value MUST be an integer in minor units
-    // Ensure amount_in_minor_units is taken directly or converted safely as integer
-    const amountInMinorUnits =
-      typeof event.data?.amount_in_minor_units === "number"
-        ? Math.floor(event.data.amount_in_minor_units)
-        : Math.floor((Number(event.data?.amount) || 0) * 100);
-
-    const currency = event.data?.currency || "USD";
-
-    try {
-      // 4. Atomic Database Transaction with Strict Idempotency
-      await prisma.$transaction(async (tx) => {
-        // Step 4a: Insert payment_logs record. Unique constraint on provider_event_id prevents double-processing.
-        await tx.payment_logs.create({
-          data: {
-            provider_event_id: providerEventId,
-            user_id: userId,
-            event_type: event.event || "charge.completed",
-            amount_in_minor_units: amountInMinorUnits,
-            currency: currency,
-            payload_json: event,
-          },
-        });
-
-        // Step 4b: Grant or upgrade entitlement if charge is successful
-        if (
-          event.event === "charge.completed" &&
-          (event.data?.status === "successful" || event.status === "successful")
-        ) {
-          const interval = planInterval === "yearly" ? "yearly" : "monthly";
-          const durationDays = interval === "yearly" ? 365 : 30;
-          const periodStart = new Date();
-          const periodEnd = new Date(
-            Date.now() + durationDays * 24 * 60 * 60 * 1000
-          );
-
-          await tx.subscriptions.upsert({
-            where: { user_id: userId },
-            update: {
-              plan_interval: interval,
-              status: "active",
-              current_period_start: periodStart,
-              current_period_end: periodEnd,
-              cancel_at_period_end: false,
-              cancellation_reason: null,
-            },
-            create: {
-              user_id: userId,
-              provider_subscription_id: String(
-                event.data?.subscription_id || providerEventId
-              ),
-              plan_interval: interval,
-              status: "active",
-              current_period_start: periodStart,
-              current_period_end: periodEnd,
-              cancel_at_period_end: false,
-            },
-          });
-
-          logger.info({
-            context: "Webhook:Flutterwave",
-            message: `Successfully provisioned ${interval} subscription for user ${userId}`,
-            data: { userId, providerEventId, interval },
-          });
-        }
-      });
-
-      return NextResponse.json({ status: "success" }, { status: 200 });
-    } catch (dbError: any) {
-      // Step 4c: Catch Prisma unique constraint collision on provider_event_id (P2002)
-      if (dbError.code === "P2002") {
-        logger.info({
+      if (
+        !verified ||
+        verified.status !== "successful" ||
+        String(verified.tx_ref) !== String(event.data?.tx_ref) ||
+        Number(verified.amount) !== Number(event.data?.amount) ||
+        String(verified.currency) !== String(event.data?.currency || "USD")
+      ) {
+        logger.warn({
           context: "Webhook:Flutterwave",
-          message: `Idempotent duplicate event skipped: ${providerEventId}`,
+          message: `Server-side verification failed for event ${providerEventId}`,
+          data: { providerEventId, verifiedStatus: verified?.status },
         });
         return NextResponse.json(
-          { message: "Event already processed" },
-          { status: 200 }
+          { error: "Transaction verification failed. No state was mutated." },
+          { status: 400 }
         );
       }
 
-      logger.error({
+      logger.info({
         context: "Webhook:Flutterwave",
-        message: "Transaction processing failed",
-        error: dbError,
+        message: `Transaction ${providerEventId} verified server-side`,
+        data: { providerEventId },
       });
+    }
 
+    // 5. Atomic, idempotent event processing
+    const result = await processChargeEvent(event);
+
+    if (result.status === "duplicate") {
       return NextResponse.json(
-        { error: "Transaction processing failed" },
-        { status: 500 }
+        { message: "Event already processed" },
+        { status: 200 }
       );
     }
+
+    return NextResponse.json({ status: "success" }, { status: 200 });
   } catch (error: any) {
     logger.error({
       context: "Webhook:Flutterwave",

@@ -84,12 +84,104 @@ export async function POST(req: NextRequest) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const redirectUrl = `${appUrl}/checkout/return?tx_ref=${txRef}`;
 
-    // For Flutterwave Hosted Checkout:
-    // When live credentials are configured, we request payment link or generate hosted payment redirect URL.
-    // In test environment, we direct user to Flutterwave hosted checkout simulator or standard test link.
-    const checkoutUrl = `https://checkout.flutterwave.com/v3/hosted/pay?tx_ref=${txRef}&amount=${amountInMinorUnits / 100}&currency=USD&redirect_url=${encodeURIComponent(
-      redirectUrl
-    )}&customer_email=${encodeURIComponent(user.email)}&meta[user_id]=${userId}&meta[plan_interval]=${planInterval}`;
+    // --- Flutterwave Standard (Hosted Checkout) integration ---
+    // Server-side call to POST /v3/payments returns a hosted checkout link.
+    const secretKey = process.env.FLUTTERWAVE_SECRET_KEY;
+    const apiBase = process.env.FLUTTERWAVE_API_BASE || "https://api.flutterwave.com/v3";
+
+    if (!secretKey || secretKey.includes("REPLACE_WITH")) {
+      logger.error({
+        context: "Checkout:Initiate",
+        message: "FLUTTERWAVE_SECRET_KEY is not configured in .env",
+      });
+      return NextResponse.json(
+        { error: "Payment gateway is not configured. Ask the admin to set FLUTTERWAVE_SECRET_KEY." },
+        { status: 500 }
+      );
+    }
+
+    const currency = process.env.SYSTEM_CURRENCY || "USD";
+    const paymentPlan =
+      planInterval === "yearly"
+        ? process.env.FLUTTERWAVE_PAYMENT_PLAN_YEARLY
+        : process.env.FLUTTERWAVE_PAYMENT_PLAN_MONTHLY;
+
+    const checkoutPayload: Record<string, unknown> = {
+      tx_ref: txRef,
+      amount: amountInMinorUnits / 100,
+      currency,
+      redirect_url: redirectUrl,
+      customer: {
+        email: user.email,
+        name: `${user.email.split("@")[0]}`,
+      },
+      customizations: {
+        title: "IdemPay Subscription",
+        description: `${planInterval} plan subscription`,
+      },
+      meta: {
+        user_id: userId,
+        plan_interval: planInterval,
+      },
+      configurations: {
+        session_duration: 30,
+        max_retry_attempt: 3,
+      },
+    };
+
+    if (paymentPlan) {
+      checkoutPayload.payment_plan = Number(paymentPlan);
+    }
+
+    let flutterwaveResponse: Response;
+    try {
+      flutterwaveResponse = await fetch(`${apiBase}/payments`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${secretKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(checkoutPayload),
+      });
+    } catch (networkError: any) {
+      logger.error({
+        context: "Checkout:Initiate",
+        message: "Network error reaching Flutterwave API",
+        error: networkError,
+      });
+      return NextResponse.json(
+        { error: "Unable to reach the payment gateway. Please try again." },
+        { status: 502 }
+      );
+    }
+
+    const flutterwaveResult = await flutterwaveResponse.json().catch(() => null);
+
+    if (
+      !flutterwaveResponse.ok ||
+      flutterwaveResult?.status !== "success" ||
+      !flutterwaveResult?.data?.link
+    ) {
+      logger.error({
+        context: "Checkout:Initiate",
+        message: "Flutterwave checkout initiation failed",
+        data: {
+          status: flutterwaveResponse.status,
+          flutterwaveMessage: flutterwaveResult?.message,
+          txRef,
+        },
+      });
+      return NextResponse.json(
+        {
+          error:
+            flutterwaveResult?.message ||
+            "Payment gateway could not create a checkout session.",
+        },
+        { status: 502 }
+      );
+    }
+
+    const checkoutUrl = flutterwaveResult.data.link as string;
 
     logger.info({
       context: "Checkout:Initiate",
