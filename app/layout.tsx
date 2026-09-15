@@ -1,9 +1,16 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import "./globals.css";
 import { NavigationBar } from "@/components/NavigationBar";
 import { AppViewProvider } from "@/components/AppView";
 import { prisma } from "@/lib/prisma";
 import { ensureCurrentPeriod } from "@/lib/subscription-periods";
+import {
+  authwardSignInUrl,
+  SESSION_COOKIE,
+  validateSession,
+} from "@/lib/authward";
 
 const siteName = "IdemPay";
 const siteUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://idempay.app").replace(/\/$/, "");
@@ -143,6 +150,18 @@ export default async function RootLayout({
 }) {
   const state = await getSubscriptionState();
 
+  const cookieStore = cookies();
+  const sessionToken = cookieStore.get(SESSION_COOKIE)?.value;
+  const sessionUser = sessionToken
+    ? await validateSession(sessionToken)
+    : null;
+
+  if (sessionToken && !sessionUser) {
+    redirect(authwardSignInUrl());
+  }
+
+  const userEmail = sessionUser?.email ?? state.email;
+
   return (
     <html lang="en" data-theme="light">
       <head>
@@ -174,7 +193,7 @@ export default async function RootLayout({
             activePlan={state.activePlan}
             cancelAtPeriodEnd={state.cancelAtPeriodEnd}
             currentPeriodEnd={state.currentPeriodEnd}
-            userEmail={state.email}
+            userEmail={userEmail}
           />
           <main className="flex-1 overflow-y-auto pt-header-h w-full bg-background">
             {children}

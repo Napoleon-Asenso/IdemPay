@@ -4,8 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:integrated": "next dev -p 3001",
     "build": "next build",
     "start": "next start",
+    "start:integrated": "next start -p 3001",
     "lint": "next lint",
     "test:proration": "ts-node tests/proration.test.ts",
     "db:seed": "ts-node prisma/seed.ts"

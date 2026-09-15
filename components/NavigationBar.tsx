@@ -29,7 +29,42 @@ export function NavigationBar({
 }: NavigationBarProps) {
   const { view, setView } = useAppView();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const readCookie = (name: string): string | null => {
+    const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
+    return match ? decodeURIComponent(match[1]) : null;
+  };
+
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    try {
+      setSigningOut(true);
+      const csrf = readCookie("csrf_token");
+      const res = await fetch("/api/auth/signout", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(csrf ? { "x-csrf-token": csrf } : {}),
+        },
+      });
+      const body = (await res.json().catch(() => null)) as {
+        redirectUrl?: string;
+      } | null;
+      const target =
+        body?.redirectUrl ??
+        `${window.location.protocol}//${window.location.hostname}:3000/auth?mode=signin`;
+      if (window.top && window.top !== window) {
+        window.top.location.assign(target);
+      } else {
+        window.location.assign(target);
+      }
+    } catch {
+      const fallback = `${window.location.protocol}//${window.location.hostname}:3000/auth?mode=signin`;
+      window.location.assign(fallback);
+    }
+  };
 
   const displayName = userEmail
     .split("@")[0]
@@ -165,7 +200,9 @@ export function NavigationBar({
                   <div className="px-space-md py-space-sm">
                     <button
                       type="button"
-                      className="w-full flex items-center gap-space-sm text-body-md text-on-surface hover:text-error transition-colors rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                      onClick={handleSignOut}
+                      disabled={signingOut}
+                      className="w-full flex items-center gap-space-sm text-body-md text-on-surface hover:text-error transition-colors rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-50"
                     >
                       <span className="material-symbols-outlined text-[1.125rem] text-text-muted">logout</span>
                       <span>Sign Out</span>
