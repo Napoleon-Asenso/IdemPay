@@ -245,6 +245,12 @@ export async function POST(req: NextRequest) {
             reason: "charge status is not successful",
             verified_at: new Date().toISOString(),
           },
+        }).catch((logError: any) => {
+          logger.error({
+            context: "Webhook:Flutterwave",
+            message: `Failed to record payment failure for event ${providerEventId}`,
+            error: logError,
+          });
         });
 
         return NextResponse.json(
@@ -265,6 +271,12 @@ export async function POST(req: NextRequest) {
         status: "failed",
         transactionId: providerEventId,
         payload: event as unknown,
+      }).catch((logError: any) => {
+        logger.error({
+          context: "Webhook:Flutterwave",
+          message: `Failed to record payment failure for event ${providerEventId}`,
+          error: logError,
+        });
       });
 
       return NextResponse.json(
