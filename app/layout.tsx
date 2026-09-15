@@ -119,6 +119,7 @@ async function getSubscriptionState() {
         activePlan: user.subscription.plan_interval,
         cancelAtPeriodEnd: user.subscription.cancel_at_period_end,
         currentPeriodEnd: periodEnd.toISOString(),
+        pendingPlanInterval: user.subscription.pending_plan_interval ?? null,
         email: user.email,
       };
     }
@@ -130,6 +131,7 @@ async function getSubscriptionState() {
     activePlan: "Free",
     cancelAtPeriodEnd: false,
     currentPeriodEnd: null,
+    pendingPlanInterval: null,
     email: "alex.dev@example.com",
   };
 }
@@ -162,7 +164,12 @@ export default async function RootLayout({
         />
       </head>
       <body className="bg-background font-body-md text-on-surface h-screen flex flex-col overflow-hidden">
-        <AppViewProvider activePlan={state.activePlan}>
+        <AppViewProvider
+          activePlan={state.activePlan}
+          cancelAtPeriodEnd={state.cancelAtPeriodEnd}
+          currentPeriodEnd={state.currentPeriodEnd}
+          pendingPlanInterval={state.pendingPlanInterval}
+        >
           <NavigationBar
             activePlan={state.activePlan}
             cancelAtPeriodEnd={state.cancelAtPeriodEnd}

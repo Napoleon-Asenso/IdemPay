@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
       data: {
         cancel_at_period_end: false,
         cancellation_reason: null,
+        pending_plan_interval: null,
       },
     });
 

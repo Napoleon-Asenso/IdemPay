@@ -4,6 +4,12 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppView } from "@/components/AppView";
 import { StatusToast } from "@/components/StatusToast";
+import { ProrationCallout } from "@/components/ProrationCallout";
+import { PlanUpgradeModal } from "@/components/PlanUpgradeModal";
+import {
+  calculateUpgradeProration,
+  formatCurrencyFromMinorUnits,
+} from "@/lib/proration";
 import { PLANS, PlanInterval } from "@/types";
 
 const PLAN_TABS: { interval: PlanInterval; label: string }[] = [
@@ -25,13 +31,61 @@ function normalizePlan(activePlan: string): PlanInterval {
 
 export default function PlansView() {
   const router = useRouter();
-  const { activePlan } = useAppView();
+  const {
+    activePlan,
+    cancelAtPeriodEnd,
+    currentPeriodEnd,
+    pendingPlanInterval,
+  } = useAppView();
 
   const currentPlan = normalizePlan(activePlan);
 
   const [selected, setSelected] = useState<PlanInterval>("monthly");
   const [isProcessing, setIsProcessing] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [proration, setProration] = useState<null | {
+    target: PlanInterval;
+    unusedCredit: number;
+    netAmountDue: number;
+    daysRemaining: number;
+  }>(null);
+  const [upgradeModal, setUpgradeModal] = useState<null | {
+    target: PlanInterval;
+    unusedCredit: number;
+    netAmountDue: number;
+    daysRemaining: number;
+  }>(null);
+  const [queueing, setQueueing] = useState(false);
+
+  const isPaidCurrent =
+    currentPlan === "monthly" || currentPlan === "yearly";
+
+  const formatPriceLabel = (interval: PlanInterval): string =>
+    interval === "yearly"
+      ? "$200.00/yr"
+      : interval === "monthly"
+      ? "$20.00/mo"
+      : "$0";
+
+  const periodEndDate = currentPeriodEnd ? new Date(currentPeriodEnd) : null;
+
+  const computeProration = (target: PlanInterval) => {
+    if (!isPaidCurrent) return null;
+    const totalDays = PLANS[currentPlan].periodDays;
+    const daysRemaining = periodEndDate
+      ? Math.max(
+          0,
+          Math.min(totalDays, Math.ceil((periodEndDate.getTime() - Date.now()) / 86400000))
+        )
+      : 0;
+    const { unusedCredit, netAmountDue } = calculateUpgradeProration(
+      PLANS[currentPlan].priceInMinorUnits,
+      PLANS[target].priceInMinorUnits,
+      daysRemaining,
+      totalDays
+    );
+    return { unusedCredit, netAmountDue, daysRemaining };
+  };
 
   const getPlanAction = (interval: PlanInterval) => {
     const diff = PLAN_TIER[interval] - PLAN_TIER[currentPlan];
@@ -54,22 +108,92 @@ export default function PlansView() {
       );
     }
 
+    // A plan the user already approved to start after the running plan exhausts.
+    if (pendingPlanInterval === interval) {
+      return (
+        <div className="w-full py-space-md px-space-lg rounded-lg bg-surface-container text-on-surface-variant font-medium text-center cursor-default border-2 border-outline-variant flex items-center justify-center gap-space-sm">
+          <span className="material-symbols-outlined text-[1.125rem]">schedule</span>
+          <span>Approved — starts after current plan ends</span>
+        </div>
+      );
+    }
+
     return (
       <button
         type="button"
         className="w-full py-space-md px-space-lg rounded-lg bg-primary text-on-primary font-medium hover:bg-primary-container transition-colors flex items-center justify-center gap-space-sm shadow-sm"
-        onClick={() => {
-          if (action.isUpgrade) {
-            initiateCheckout(interval, PLANS[interval].priceInMinorUnits, true);
-          } else {
-            handleDowngrade(interval);
-          }
-        }}
+        disabled={isProcessing}
+        onClick={() => handlePlanSelect(interval, action)}
       >
         <span>{action.label}</span>
         <span className="material-symbols-outlined text-[1.125rem]">arrow_forward</span>
       </button>
     );
+  };
+
+  const handlePlanSelect = (
+    interval: PlanInterval,
+    action: { isUpgrade: boolean }
+  ) => {
+    if (isProcessing) return;
+
+    if (!action.isUpgrade) {
+      handleDowngrade(interval);
+      return;
+    }
+
+    // Free → paid, or paid → paid where no credit exists: full price checkout.
+    if (!isPaidCurrent) {
+      initiateCheckout(interval, PLANS[interval].priceInMinorUnits, true);
+      return;
+    }
+
+    // Paid → paid upgrade: compute exact whole-cent proration FIRST so a
+    // user is never handed a full-price checkout that double-charges them
+    // for the remaining, unused portion of their current cycle.
+    const rate = computeProration(interval);
+    if (!rate) {
+      initiateCheckout(interval, PLANS[interval].priceInMinorUnits, true);
+      return;
+    }
+
+    // Cancelled-but-active user: never go straight to checkout without
+    // surfacing the running plan and an approval CTA for add-after-end.
+    if (cancelAtPeriodEnd) {
+      setUpgradeModal({ target: interval, ...rate });
+      return;
+    }
+
+    // Regular mid-cycle upgrade: preview the proration before checkout.
+    setProration({ target: interval, ...rate });
+  };
+
+  const handleQueueAfterEnd = async (target: PlanInterval) => {
+    if (queueing) return;
+    setQueueing(true);
+    try {
+      const res = await fetch("/api/subscription/schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "usr_test_default", planInterval: target }),
+      });
+
+      if (res.ok) {
+        setUpgradeModal(null);
+        setToast(
+          `Approved — ${PLANS[target].name} will start after your current plan ends. No charge today.`
+        );
+        router.refresh();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to schedule the new plan");
+      }
+    } catch (err) {
+      console.error("Failed to schedule plan:", err);
+      alert("Failed to schedule the new plan");
+    } finally {
+      setQueueing(false);
+    }
   };
 
   const handleDowngrade = async (target: PlanInterval) => {
@@ -150,6 +274,42 @@ export default function PlansView() {
             ))}
           </div>
         </div>
+
+        {/* Approved follow-up plan notice (cancelled plan, approval queued) */}
+        {pendingPlanInterval && cancelAtPeriodEnd && (
+          <div className="mb-space-xl rounded-xl bg-surface-container-high ring-1 ring-outline-variant/60 p-space-lg flex items-start gap-space-md">
+            <span className="material-symbols-outlined text-primary text-[1.25rem] shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>schedule</span>
+            <div>
+              <span className="font-label-lg text-label-lg text-on-surface">
+                {PLANS[pendingPlanInterval as PlanInterval].name} approved to start next
+              </span>
+              <p className="text-body-sm text-on-surface-variant mt-space-xs">
+                Your current {PLANS[currentPlan].name} plan is running until{" "}
+                {periodEndDate
+                  ? periodEndDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                  : "the end of your cycle"}
+                . The approved plan begins automatically then — no charge today.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Mid-cycle proration callout before checkout */}
+        {proration && (
+          <ProrationCallout
+            currentPlanMinorUnits={PLANS[currentPlan].priceInMinorUnits}
+            newPlanMinorUnits={PLANS[proration.target].priceInMinorUnits}
+            unusedCredit={proration.unusedCredit}
+            netAmountDue={proration.netAmountDue}
+            daysRemaining={proration.daysRemaining}
+            totalDays={PLANS[currentPlan].periodDays}
+            onCancel={() => setProration(null)}
+            onConfirm={() => {
+              initiateCheckout(proration.target, proration.netAmountDue, true);
+              setProration(null);
+            }}
+          />
+        )}
 
         {/* Pricing Cards Bento Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-margin mb-space-xl">
@@ -263,6 +423,35 @@ export default function PlansView() {
         </div>
 
         <StatusToast message={toast} onClose={() => setToast(null)} />
+
+        {upgradeModal && (
+          <PlanUpgradeModal
+            isOpen={Boolean(upgradeModal)}
+            onClose={() => setUpgradeModal(null)}
+            currentPlanName={PLANS[currentPlan].name}
+            periodEndLabel={
+              periodEndDate
+                ? periodEndDate.toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })
+                : "the end of your cycle"
+            }
+            targetPlanName={PLANS[upgradeModal.target].name}
+            targetPlanPriceLabel={formatPriceLabel(upgradeModal.target)}
+            proratedDueLabel={formatCurrencyFromMinorUnits(upgradeModal.netAmountDue)}
+            fullPriceLabel={formatCurrencyFromMinorUnits(
+              PLANS[upgradeModal.target].priceInMinorUnits
+            )}
+            queueing={queueing}
+            onQueueAfterEnd={() => handleQueueAfterEnd(upgradeModal.target)}
+            onStartNowProrated={() => {
+              initiateCheckout(upgradeModal.target, upgradeModal.netAmountDue, true);
+              setUpgradeModal(null);
+            }}
+          />
+        )}
       </div>
     </div>
   );

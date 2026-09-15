@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
         plan_interval: target === "monthly" ? "monthly" : "free",
         cancel_at_period_end: false,
         cancellation_reason: null,
+        pending_plan_interval: null,
       },
     });
 

@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
@@ -11,6 +12,7 @@ export interface FlutterwaveTransaction {
 }
 
 export interface FlutterwaveEvent {
+  id?: string | number;
   event?: string;
   data?: {
     id?: string | number;
@@ -125,15 +127,36 @@ export async function processChargeEvent(
             typeof event.data?.id === "number" || typeof event.data?.id === "string"
               ? String(event.data.id)
               : null,
-          payload_json: event,
+          payload_json: event as unknown as Prisma.InputJsonValue,
         },
       });
 
       if (isSuccessfulCharge) {
         const interval = planInterval === "yearly" ? "yearly" : "monthly";
         const durationDays = interval === "yearly" ? 365 : 30;
-        const periodStart = new Date();
-        const periodEnd = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
+
+        // Proration-aware period extension (PRD Journey B): on a mid-cycle
+        // upgrade the new period EXTENDS from the existing current_period_end
+        // so the user's remaining credit is never wiped out. Only when no
+        // usable period exists do we start fresh from now.
+        const existing = await tx.subscriptions.findUnique({
+          where: { user_id: userId ?? "" },
+          select: { current_period_start: true, current_period_end: true, status: true },
+        });
+
+        const canExtend =
+          existing?.status === "active" &&
+          existing.current_period_end.getTime() > Date.now();
+
+        const periodStart = canExtend
+          ? new Date(existing!.current_period_start)
+          : new Date();
+        const periodEnd = canExtend
+          ? new Date(
+              existing!.current_period_end.getTime() +
+                durationDays * 24 * 60 * 60 * 1000
+            )
+          : new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
 
         await tx.subscriptions.upsert({
           where: { user_id: userId ?? "" },
@@ -144,6 +167,7 @@ export async function processChargeEvent(
             current_period_end: periodEnd,
             cancel_at_period_end: false,
             cancellation_reason: null,
+            pending_plan_interval: null,
           },
           create: {
             user_id: userId ?? "",

@@ -1,21 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import {
-  FlutterwaveEvent,
-  processChargeEvent,
-  verifyFlutterwaveTransaction,
-} from "@/lib/flutterwave";
+import { verifyFlutterwaveTransaction } from "@/lib/flutterwave";
 
 /**
  * POST /api/checkout/confirm
  *
- * Called by the checkout return view once a user is redirected back with a
- * successful payment. Server-to-server verification runs against Flutterwave
- * BEFORE any entitlement mutation — the client query params are never trusted.
+ * READ-ONLY payment confirmation. NEVER grants entitlements.
  *
- * The idempotent processor is shared with the webhook, so a delayed or
- * duplicate confirmation can never double-grant a subscription.
+ * Zero-trust architecture: the client-triggered confirm path only performs a
+ * server-to-server verification against Flutterwave and checks that the
+ * verified charge was recorded by the webhook pipeline (payment_logs). The
+ * final entitlement mutation happens strictly on the server-to-server
+ * /api/webhooks/flutterwave path — this route has no write access to
+ * subscription state.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -44,53 +42,42 @@ export async function POST(req: NextRequest) {
     // 1. Server-to-server verification with Flutterwave.
     const verified = await verifyFlutterwaveTransaction(String(transactionId));
 
-    if (
+    const matchesGateway =
       !verified ||
       verified.status !== "successful" ||
       String(verified.tx_ref) !== String(txRef) ||
       Math.floor((Number(verified.amount) || 0) * 100) !== initiation.amount_in_minor_units ||
-      String(verified.currency) !== String(initiation.currency || "USD")
-    ) {
-      logger.warn({
-        context: "Checkout:Confirm",
-        message: `Payment verification failed for tx_ref ${txRef}`,
-        data: { userId, txRef, transactionId, verifiedStatus: verified?.status },
-      });
-      return NextResponse.json(
-        { error: "Payment could not be verified with the gateway." },
-        { status: 400 }
-      );
-    }
+      String(verified.currency) !== String(initiation.currency || "USD");
 
-    // 2. Grant entitlement via the same idempotent pipeline as the webhook.
-    const payload = initiation.payload_json as Record<string, unknown> | null;
-    const planInterval = payload?.plan_interval === "yearly" ? "yearly" : "monthly";
-
-    const event: FlutterwaveEvent = {
-      event: "charge.completed",
-      data: {
-        id: String(transactionId),
-        tx_ref: String(txRef),
-        amount: Number(verified.amount),
-        currency: String(verified.currency),
-        status: "successful",
-        meta: {
-          user_id: String(userId),
-          plan_interval: planInterval,
-        },
-      },
-    };
-
-    await processChargeEvent(event);
+    // 2. Check the webhook already recorded this verified charge. This is the
+    //    source of truth for entitlement — the subscription is only ever
+    //    mutated on the webhook path.
+    const processed = matchesGateway
+      ? null
+      : await prisma.payment_logs.findUnique({
+          where: { provider_event_id: String(transactionId) },
+        });
 
     const subscription = await prisma.subscriptions.findUnique({
       where: { user_id: String(userId) },
     });
 
+    if (matchesGateway || !processed) {
+      logger.warn({
+        context: "Checkout:Confirm",
+        message: `Payment not confirmed yet for tx_ref ${txRef}`,
+        data: { userId, txRef, transactionId, verifiedStatus: verified?.status },
+      });
+      return NextResponse.json(
+        { confirmed: false, subscription },
+        { status: 200 }
+      );
+    }
+
     logger.info({
       context: "Checkout:Confirm",
-      message: `Payment confirmed for user ${userId}`,
-      data: { userId, txRef, transactionId, planInterval },
+      message: `Payment confirmed read-only for user ${userId}`,
+      data: { userId, txRef, transactionId },
     });
 
     return NextResponse.json(
