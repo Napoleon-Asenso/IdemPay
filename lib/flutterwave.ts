@@ -38,6 +38,60 @@ export function getFlutterwaveApiBase(): string {
 }
 
 /**
+ * Derives an integer minor-unit amount from a Flutterwave payload. Prefers the
+ * gateway integer field; falls back to converting the major-unit amount only
+ * when the integer field is absent.
+ */
+export function computeAmountInMinorUnits(event: FlutterwaveEvent): number {
+  const amountInMinor = event.data?.amount_in_minor_units;
+  if (typeof amountInMinor === "number" && Number.isInteger(amountInMinor)) {
+    return amountInMinor;
+  }
+  return Math.floor((Number(event.data?.amount) || 0) * 100);
+}
+
+/**
+ * Records a payment lifecycle event (verification, failure, etc.) as its own
+ * row in payment_logs. Each call is idempotent: the unique provider_event_id
+ * constraint guarantees a repeated event is recorded exactly once, and P2002
+ * collisions are surfaced as `duplicate` instead of throwing.
+ */
+export async function logPaymentEvent(params: {
+  providerEventId: string;
+  userId: string | null;
+  eventType: string;
+  amountInMinorUnits: number;
+  currency: string;
+  paymentMethod?: string | null;
+  status: string | null;
+  transactionId?: string | null;
+  payload: unknown;
+}): Promise<{ status: "recorded" | "duplicate" }> {
+  try {
+    await prisma.payment_logs.create({
+      data: {
+        provider_event_id: params.providerEventId,
+        user_id: params.userId ?? "",
+        event_type: params.eventType,
+        amount_in_minor_units: params.amountInMinorUnits,
+        currency: params.currency,
+        payment_method: params.paymentMethod || null,
+        status: params.status,
+        gateway: "flutterwave",
+        transaction_id: params.transactionId ?? null,
+        payload_json: params.payload as Prisma.InputJsonValue,
+      },
+    });
+    return { status: "recorded" };
+  } catch (error: any) {
+    if (error?.code === "P2002") {
+      return { status: "duplicate" };
+    }
+    throw error;
+  }
+}
+
+/**
  * Server-to-server transaction verification.
  * Returns the verified transaction data, or null when the transaction
  * cannot be confirmed with Flutterwave.
@@ -98,10 +152,7 @@ export async function processChargeEvent(
   const userId = event.data?.meta?.user_id;
   const planInterval = event.data?.meta?.plan_interval as "monthly" | "yearly" | undefined;
 
-  const amountInMinorUnits =
-    typeof event.data?.amount_in_minor_units === "number"
-      ? Math.floor(event.data.amount_in_minor_units)
-      : Math.floor((Number(event.data?.amount) || 0) * 100);
+  const amountInMinorUnits = computeAmountInMinorUnits(event);
 
   const currency = event.data?.currency || "USD";
   const paymentMethod =

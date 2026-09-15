@@ -3,6 +3,8 @@ import crypto from "crypto";
 import { logger } from "@/lib/logger";
 import {
   FlutterwaveEvent,
+  computeAmountInMinorUnits,
+  logPaymentEvent,
   processChargeEvent,
   verifyFlutterwaveTransaction,
 } from "@/lib/flutterwave";
@@ -124,6 +126,32 @@ export async function POST(req: NextRequest) {
           message: `Server-side verification failed for event ${providerEventId}`,
           data: { providerEventId, verifiedStatus: verified?.status },
         });
+
+        // Record the failed verification as a distinct failure event. Best-effort:
+        // the rejection response is authoritative even if audit logging fails.
+        await logPaymentEvent({
+          providerEventId: `${providerEventId}:verification_failed`,
+          userId: event.data?.meta?.user_id ?? null,
+          eventType: "verification_failed",
+          amountInMinorUnits: computeAmountInMinorUnits(event),
+          currency: String(event.data?.currency || "USD"),
+          paymentMethod:
+            event.data?.payment_type || event.data?.meta?.payment_method || "card",
+          status: "failed",
+          transactionId: providerEventId,
+          payload: {
+            event,
+            verified_status: verified?.status,
+            verified_at: new Date().toISOString(),
+          },
+        }).catch((logError: any) => {
+          logger.error({
+            context: "Webhook:Flutterwave",
+            message: `Failed to record verification failure for event ${providerEventId}`,
+            error: logError,
+          });
+        });
+
         return NextResponse.json(
           { error: "Transaction verification failed. No state was mutated." },
           { status: 400 }
@@ -144,11 +172,105 @@ export async function POST(req: NextRequest) {
           message: `Charge event ${providerEventId} rejected: missing meta.user_id`,
           data: { providerEventId },
         });
+
+        await logPaymentEvent({
+          providerEventId: `${providerEventId}:verification_failed`,
+          userId: null,
+          eventType: "verification_failed",
+          amountInMinorUnits: computeAmountInMinorUnits(event),
+          currency: String(event.data?.currency || "USD"),
+          paymentMethod:
+            event.data?.payment_type || event.data?.meta?.payment_method || "card",
+          status: "failed",
+          transactionId: providerEventId,
+          payload: {
+            event,
+            reason: "missing meta.user_id",
+            verified_at: new Date().toISOString(),
+          },
+        }).catch((logError: any) => {
+          logger.error({
+            context: "Webhook:Flutterwave",
+            message: `Failed to record verification failure for event ${providerEventId}`,
+            error: logError,
+          });
+        });
+
         return NextResponse.json(
           { error: "Payload is missing subscriber identity. No state was mutated." },
           { status: 400 }
         );
       }
+
+      // 4c. Record the server-side verification event BEFORE any entitlement
+      // mutation so the audit trail shows initiation -> verification -> fulfilment.
+      await logPaymentEvent({
+        providerEventId: `${providerEventId}:verified`,
+        userId: event.data.meta.user_id,
+        eventType: "charge.verified",
+        amountInMinorUnits: computeAmountInMinorUnits(event),
+        currency: String(event.data.currency || "USD"),
+        paymentMethod:
+          event.data.payment_type || event.data.meta.payment_method || "card",
+        status: "verified",
+        transactionId: providerEventId,
+        payload: {
+          event: event.event,
+          verified_transaction: verified,
+          verified_at: new Date().toISOString(),
+        },
+      });
+
+      // 4d. A verified charge that reports a non-successful status is a payment
+      // failure: record it as a failure event and never grant entitlement.
+      if (event.data.status !== "successful") {
+        logger.warn({
+          context: "Webhook:Flutterwave",
+          message: `Verified charge ${providerEventId} reported status ${event.data.status}`,
+          data: { providerEventId, status: event.data.status },
+        });
+
+        await logPaymentEvent({
+          providerEventId: `${providerEventId}:payment_failed`,
+          userId: event.data.meta.user_id,
+          eventType: "payment_failed",
+          amountInMinorUnits: computeAmountInMinorUnits(event),
+          currency: String(event.data.currency || "USD"),
+          paymentMethod:
+            event.data.payment_type || event.data.meta.payment_method || "card",
+          status: "failed",
+          transactionId: providerEventId,
+          payload: {
+            event,
+            reason: "charge status is not successful",
+            verified_at: new Date().toISOString(),
+          },
+        });
+
+        return NextResponse.json(
+          { message: "Charge recorded as failed. No entitlement was granted." },
+          { status: 200 }
+        );
+      }
+    } else if (event.event === "charge.failed") {
+      // Flutterwave-sent charge failure events also become failure log rows.
+      await logPaymentEvent({
+        providerEventId: `${providerEventId}:payment_failed`,
+        userId: event.data?.meta?.user_id ?? null,
+        eventType: "payment_failed",
+        amountInMinorUnits: computeAmountInMinorUnits(event),
+        currency: String(event.data?.currency || "USD"),
+        paymentMethod:
+          event.data?.payment_type || event.data?.meta?.payment_method || "card",
+        status: "failed",
+        transactionId: providerEventId,
+        payload: event as unknown,
+      });
+
+      return NextResponse.json(
+        { message: "Charge recorded as failed. No entitlement was granted." },
+        { status: 200 }
+      );
     }
 
     // 5. Atomic, idempotent event processing
