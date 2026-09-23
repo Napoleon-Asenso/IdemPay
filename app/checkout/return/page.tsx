@@ -170,14 +170,14 @@ function CheckoutReturnContent() {
                 </div>
                 <div className="flex flex-wrap items-center gap-space-md pt-space-sm">
                   <Link
-                    href="/?view=billing"
+                    href="/billing"
                     className="flex items-center justify-center gap-space-sm px-space-xl py-space-md bg-primary text-on-primary rounded-lg font-label-lg hover:bg-primary-container transition-colors shadow-md"
                   >
                     <span className="material-symbols-outlined text-[1.125rem]">dashboard</span>
                     <span>Go to Billing Dashboard</span>
                   </Link>
                   <Link
-                    href="/?view=plans"
+                    href="/plans"
                     className="px-space-lg py-space-md bg-surface-container text-on-surface rounded-lg font-label-lg hover:bg-surface-container-high transition-colors"
                   >
                     Back to Plans
@@ -208,7 +208,7 @@ function CheckoutReturnContent() {
                     Check Payment Status
                   </button>
                   <Link
-                    href="/?view=billing"
+                    href="/billing"
                     className="px-space-lg py-space-md bg-surface-container text-on-surface rounded-lg font-label-lg hover:bg-surface-container-high transition-colors"
                   >
                     Go to Billing
@@ -228,14 +228,14 @@ function CheckoutReturnContent() {
                 </p>
                 <div className="flex flex-wrap items-center gap-space-md pt-space-sm">
                   <Link
-                    href="/?view=plans"
+                    href="/plans"
                     className="flex items-center justify-center gap-space-sm px-space-xl py-space-md bg-primary text-on-primary rounded-lg font-label-lg hover:bg-primary-container transition-colors shadow-md"
                   >
                     <span className="material-symbols-outlined text-[1.125rem]">grid_view</span>
                     <span>Choose a Plan</span>
                   </Link>
                   <Link
-                    href="/?view=billing"
+                    href="/billing"
                     className="px-space-lg py-space-md bg-surface-container text-on-surface rounded-lg font-label-lg hover:bg-surface-container-high transition-colors"
                   >
                     Go to Billing

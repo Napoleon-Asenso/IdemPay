@@ -1,4 +1,5 @@
 import { calculateUpgradeProration } from "../lib/proration";
+import { authwardConfigured, authwardSignInUrl } from "../lib/authward";
 
 function runTests() {
   console.log("Running Proration Engine Precision Tests...\n");
@@ -41,6 +42,14 @@ function runTests() {
   console.log("Test 4 (1 day remaining):", test4);
   if (test4.unusedCredit !== 66 || test4.netAmountDue !== 19934) {
     throw new Error(`Test 4 Failed: Expected { unusedCredit: 66, netAmountDue: 19934 }, got ${JSON.stringify(test4)}`);
+  }
+
+  // Regression check: local runtime without AUTHWARD_URL should not redirect to itself.
+  if (authwardConfigured()) {
+    throw new Error("Expected local development mode to treat Authward as unconfigured.");
+  }
+  if (authwardSignInUrl() !== "") {
+    throw new Error(`Expected empty sign-in URL in local mode, got ${authwardSignInUrl()}`);
   }
 
   console.log("\nALL PRORATION TESTS PASSED WITH 100% INTEGER PRECISION!");

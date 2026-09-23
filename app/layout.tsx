@@ -7,6 +7,7 @@ import { AppViewProvider } from "@/components/AppView";
 import { prisma } from "@/lib/prisma";
 import { ensureCurrentPeriod } from "@/lib/subscription-periods";
 import {
+  authwardConfigured,
   authwardSignInUrl,
   SESSION_COOKIE,
   validateSession,
@@ -148,15 +149,68 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const skipAuth =
+    process.env.NEXT_PHASE === "phase-production-build" ||
+    process.env.NEXT_PUBLIC_SKIP_AUTH === "true";
+
   const state = await getSubscriptionState();
+
+  if (skipAuth) {
+    return (
+      <html lang="en" data-theme="light">
+        <head>
+          <link
+            href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+            rel="stylesheet"
+          />
+          <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap"
+            rel="stylesheet"
+          />
+          <link
+            href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400..700&display=swap"
+            rel="stylesheet"
+          />
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+          />
+        </head>
+        <body className="bg-background font-body-md text-on-surface h-screen flex flex-col overflow-hidden">
+          <AppViewProvider
+            activePlan={state.activePlan}
+            cancelAtPeriodEnd={state.cancelAtPeriodEnd}
+            currentPeriodEnd={state.currentPeriodEnd}
+            pendingPlanInterval={state.pendingPlanInterval}
+          >
+            <NavigationBar
+              activePlan={state.activePlan}
+              cancelAtPeriodEnd={state.cancelAtPeriodEnd}
+              currentPeriodEnd={state.currentPeriodEnd}
+              userEmail={state.email}
+            />
+            <main className="flex-1 overflow-y-auto pt-header-h w-full bg-background">
+              {children}
+            </main>
+          </AppViewProvider>
+        </body>
+      </html>
+    );
+  }
 
   const cookieStore = cookies();
   const sessionToken = cookieStore.get(SESSION_COOKIE)?.value;
-  const sessionUser = sessionToken
-    ? await validateSession(sessionToken)
-    : null;
+  const sessionUser = sessionToken ? await validateSession(sessionToken) : null;
+
+  if (!authwardConfigured()) {
+    throw new Error("Authward is not configured. Set AUTHWARD_URL or NEXT_PUBLIC_AUTHWARD_URL before starting the app.");
+  }
 
   if (sessionToken && !sessionUser) {
+    redirect(authwardSignInUrl());
+  }
+
+  if (!sessionToken) {
     redirect(authwardSignInUrl());
   }
 

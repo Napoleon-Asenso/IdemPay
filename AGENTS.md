@@ -1,6 +1,6 @@
 # AGENTS.md — Workspace Guidance & Architectural Laws
 
-This document governs the operational rules, core architectural constraints, and execution workflow for AI coding agents working on **FluxPay** (Assessment 2: Payment and Subscription Slice).
+This document governs the operational rules, core architectural constraints, and execution workflow for AI coding agents working on **IdemPay** (Assessment 2: Payment and Subscription Slice).
 
 ---
 

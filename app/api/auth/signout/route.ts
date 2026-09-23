@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual, createHash } from "node:crypto";
 import {
-  AUTHWARD_SIGN_IN_PATH,
   authwardBaseUrl,
+  authwardConfigured,
+  authwardSignInUrl,
   CSRF_COOKIE,
   SESSION_COOKIE,
 } from "@/lib/authward";
@@ -18,7 +19,14 @@ export async function POST(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const csrf = request.cookies.get(CSRF_COOKIE)?.value;
   const headerCsrf = request.headers.get("x-csrf-token");
-  const signInUrl = `${authwardBaseUrl()}${AUTHWARD_SIGN_IN_PATH}`;
+  const signInUrl = authwardSignInUrl();
+
+  if (!authwardConfigured()) {
+    const response = NextResponse.json({ message: "Signed out." }, { status: 200 });
+    response.cookies.delete(SESSION_COOKIE);
+    response.cookies.delete(CSRF_COOKIE);
+    return response;
+  }
 
   if (!csrf || !headerCsrf || !safeEqual(csrf, headerCsrf)) {
     return NextResponse.json(

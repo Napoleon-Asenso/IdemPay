@@ -1,18 +1,9 @@
-iimport { NextResponse, type NextRequest } from "next/server";
-
-const SESSION_COOKIE = "session_token";
-
-function authwardBaseUrl(): string {
-  return (
-    process.env.AUTHWARD_URL ??
-    process.env.NEXT_PUBLIC_AUTHWARD_URL ??
-    "http://localhost:3000"
-  );
-}
-
-function authwardSignInUrl(): string {
-  return `${authwardBaseUrl()}/auth?mode=signin`;
-}
+import { NextResponse, type NextRequest } from "next/server";
+import {
+  authwardConfigured,
+  authwardSignInUrl,
+  SESSION_COOKIE,
+} from "@/lib/authward";
 
 function isExempt(pathname: string): boolean {
   return (
@@ -36,10 +27,24 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  if (
+    process.env.NEXT_PHASE === "phase-production-build" ||
+    process.env.NEXT_PUBLIC_SKIP_AUTH === "true"
+  ) {
+    return NextResponse.next();
+  }
+
+  if (!authwardConfigured()) {
+    return NextResponse.json(
+      { error: "Authward is not configured. Set AUTHWARD_URL or NEXT_PUBLIC_AUTHWARD_URL." },
+      { status: 500 },
+    );
+  }
+
   const hasSessionCookie = request.cookies.has(SESSION_COOKIE);
 
   if (!hasSessionCookie) {
-    const signInUrl = new URL("/auth?mode=signin", authwardBaseUrl());
+    const signInUrl = new URL(authwardSignInUrl());
     return NextResponse.redirect(signInUrl);
   }
 

@@ -28,7 +28,7 @@ export default function CheckoutError({
           Try Again
         </button>
         <a
-          href="/?view=billing"
+          href="/billing"
           className="px-space-lg py-space-md bg-surface-container text-on-surface rounded-lg font-label-lg hover:bg-surface-container-high transition-colors"
         >
           Go to Billing

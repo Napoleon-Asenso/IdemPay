@@ -15,13 +15,13 @@ export default function NotFound() {
       </p>
       <div className="flex flex-wrap items-center justify-center gap-space-md mt-space-md">
         <Link
-          href="/"
+          href="/plans"
           className="bg-primary text-on-primary px-space-lg py-space-md rounded-lg font-label-lg hover:bg-primary-container transition-colors shadow-md"
         >
           Return to Plans
         </Link>
         <Link
-          href="/?view=billing"
+          href="/billing"
           className="px-space-lg py-space-md bg-surface-container text-on-surface rounded-lg font-label-lg hover:bg-surface-container-high transition-colors"
         >
           Go to Billing
